@@ -1201,11 +1201,12 @@ function say(text){const a=$('announce');a.textContent=text;a.classList.add('sho
 const GROUND_X=[-200,1400];
 const SOW_REFUSED={409:'Every spot holds a flower someone planted. There is no room left',429:'That is a lot of sowing. Give these a moment to take root'};
 // a visitor's sowing always wins: it clears the wild flowers crowding it. Live, the server keeps it; offline, the page does
+function ripple(x,y){if(!STILL){const r=el('circle',{cx:f1(x),cy:f1(y),r:6,class:'ripple'},ripples);setTimeout(()=>r.remove(),1300)}}
 async function sow(x,y){
   x=Math.min(GROUND_X[1],Math.max(GROUND_X[0],x));
   rand=mulberry32(Math.random()*2**32>>>0);
   const sp=chosen(x,y);
-  if(!STILL){const r=el('circle',{cx:f1(x),cy:f1(y),r:6,class:'ripple'},ripples);setTimeout(()=>r.remove(),1300)}
+  ripple(x,y);
   let F;
   if(LIVE){
     let res;
@@ -1214,15 +1215,16 @@ async function sow(x,y){
     if(!res.ok){say(SOW_REFUSED[res.status]||"The garden couldn't take that seed");return}
     F=(await res.json()).flower;
   }else F={id:-(++localSown),species:sp.id,x,y,plantedAt:gardenNow(),warmthAt:warmth,mine:true};
-  const before=wildOn.size,f=plant(F,true);
+  const before=wildOn.size,f=plant(F,true)||byId.get(F.id);
   if(!f)return;
   syncWild();drawFlower(f);plantSound(f);
   const seed=lifeOf(f).seed,replaced=wildOn.size<before;
   say(`You planted a ${sp.name.toLowerCase()}${seed?' seed':''}${replaced?' in place of a wildflower':''}${seed?`. It won't sprout until ${SEASONS[Math.floor(LIFE[sp.id][0])]}`:''}`);
 }
 
-// Until crit 9 brings a push channel, the page keeps in touch by asking: a heartbeat says this visitor is here,
-// and a refresh brings in what everyone else has planted
+// The page keeps in touch two ways. A heartbeat every 15 seconds says this visitor is still here, and the
+// garden's event stream (listen) brings what everyone else does as it happens. Whenever the stream (re)opens,
+// a refresh catches up on anything missed while it was closed.
 function applyPresence(P){
   presenceInfo=P;
   if(peopleOverride||P.people===people)return;
@@ -1231,6 +1233,23 @@ function applyPresence(P){
 async function heartbeat(){
   try{const r=await fetch('/api/presence',{method:'POST'});if(r.ok){const P=await r.json();applyPresence(P);applyTending(P)}}catch{}
 }
+// Someone else's flower arrives where they sowed it, with the same ripple and note as your own. A hidden tab
+// stops listening, so a page left open in the background doesn't keep the garden's machine awake
+let events=null;
+function listen(){
+  if(events||document.hidden||!window.EventSource)return;
+  events=new EventSource('/api/events');
+  events.addEventListener('open',refresh);
+  events.addEventListener('presence',e=>{const P=JSON.parse(e.data);skew=P.now-Date.now();warmth=P.warmth;applyPresence(P);applyTending(P)});
+  events.addEventListener('sown',e=>{
+    const {flower:F}=JSON.parse(e.data);
+    if(byId.has(F.id))return;
+    const f=plant(F,true);if(!f)return;
+    syncWild();drawFlower(f);
+    if(!F.mine){ripple(F.x,F.y);plantSound(f)}
+  });
+}
+if(LIVE)document.addEventListener('visibilitychange',()=>{if(document.hidden){events?.close();events=null}else listen()});
 async function refresh(){
   try{
     const r=await fetch('/api/garden');if(!r.ok)return;
@@ -1548,7 +1567,7 @@ updateCorner();
 updateWeather(0,0);
 for(const f of flowers)drawFlower(f);
 requestAnimationFrame(()=>requestAnimationFrame(t=>{root.classList.add('ready');last=t;frame(t)}));
-if(LIVE){const tick=()=>heartbeat().then(refresh);tick();setInterval(tick,15000)}
+if(LIVE){const tick=()=>heartbeat().then(()=>{if(events?.readyState!==1)refresh()});tick();setInterval(tick,15000);listen()}
 </script>
 </body>
 </html>
