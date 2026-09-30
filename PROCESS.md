@@ -2,25 +2,25 @@
 
 ## From the brief to a garden
 
-The brief asks for something multi-user, real-time and persistent that is
-better because other people are in it at the same time. I wanted co-presence to
-be the mechanic rather than a feature, so the idea is a garden that only grows
-while two or more people are in it together, where anyone can leave a flower
-behind. The capstone showcase, a room full of people at once, is the garden at
-its best; one stranger alone is the case it has to be kind to.
+The brief asks for something multi-user, real-time and persistent that becomes
+better when people use it together. I made that the main rule: the garden grows
+only when people are there together, and anyone can leave a flower behind. The
+showcase, with a room full of people, is when it should feel most alive. But it
+also has to make sense to one stranger arriving alone.
 
-Because most of what would make this good is how being together looks, I
-started with the picture, not the server: a standalone visual prototype built
-with Claude Code over one long session, brought into the repo once its look
-had settled ([`66603ae`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/66603ae)).
-The day was then repainted in Monet's broken colour so that it answers the Van
-Gogh night ([`aaa3bff`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/aaa3bff)).
+I started with the picture because the idea depends on what being together
+looks like. I built a standalone visual prototype with Claude Code in one long
+session, then brought it into the repo once the look had settled
+([`66603ae`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/66603ae)).
+Later I asked for the day to be repainted in Monet's broken colour, to give it
+a different feel from the Van Gogh night
+([`aaa3bff`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/aaa3bff)).
 
 ## How I directed the agent, and where it went wrong
 
-I steered mostly by reference and by rejection. I named what the look should
-come from (Gris and Neva, *The Starry Night*, later Monet) and looked at every
-result. The corrections that shaped the prototype were all mine, from looking:
+I gave the agent visual references (*Gris*, *Neva*, *The Starry Night*, and
+later Monet), then looked at each result and said what was wrong. These were
+the changes that mattered most:
 
 - The first draft drew trees. I wanted a garden of many kinds of flower,
   sown by visitors and growing wild, so it became nine species.
@@ -36,51 +36,53 @@ result. The corrections that shaped the prototype were all mine, from looking:
 - The sun stayed out through a thunderstorm; storm clouds now roll in over
   the sun, moon and stars.
 
-Those fixes landed in code, before the work was in git, so they are described
-here rather than cited. From this crit on, fixes go into the harness. When the
-agent ran the spec against the deployed app and planted test flowers in the
-real garden, that became a rule in `CLAUDE.md`
+These fixes happened before I put the prototype in git, so I cannot link to
+separate commits for them. I have started putting lessons like these into the
+harness. The agent once ran the spec against the deployed app and planted test
+flowers in the real garden. I added a rule against that in `CLAUDE.md`
 ([`d3e4e45`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/d3e4e45)),
-next to the rule that visual changes are checked by looking, because looking
-is how nearly every visual bug so far was found.
+alongside a rule to check visual changes by looking at them. That is how
+nearly every visual bug so far was found, by me in the browser or by the agent
+in its own screenshots.
 
 ## How the work was checked
 
-Visual work was checked with headless screenshots at every season, hour and
-number of people. One lesson from that went into `CLAUDE.md`: a headless
-browser gives an animation only a few frames, so a screenshot of a storm shows
-nothing unless the storm is stepped by hand.
+The agent checked its own visual work with headless screenshots across
+seasons, hours and numbers of visitors, and I looked at the page myself after
+each change. The screenshots showed a limit of the method: a headless browser
+only gives an animation a few frames, so the agent has to step a storm by hand
+to see it at all. That lesson is now in `CLAUDE.md`.
 
-The server's promises were written as tests first and seen to fail against the
-placeholder
-([`e3bf487`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/e3bf487)),
-then turned green by the server
-([`52d4ec9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/52d4ec9))
-and the page that talks to it
+I had the agent write the server's promises as tests first and run them
+against the placeholder, where they failed
+([`e3bf487`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/e3bf487)).
+The server turned them green
+([`52d4ec9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/52d4ec9)),
+and the page was connected to it after that
 ([`70318a8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/70318a8)).
-What the tests can't reach, flowers surviving a restart and a redeploy, I
-checked by hand on Fly.
+The part the tests cannot reach, flowers surviving a restart and a redeploy,
+the agent checked by hand on Fly by restarting and redeploying the app.
 
 ## The stack
 
-Node 24, Hono and SQLite in one process, with the case in
+I chose Node 24, Hono and SQLite in one process. The reasons are in
 [ADR 1](docs/adr/0001-stack.md)
 ([`6a5e69f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/6a5e69f)).
-The page paints itself, so the server needs very little: an anonymous identity,
-the planted flowers, who is here, and a running total of time spent together.
-Node runs the TypeScript directly, so what I test is what deploys. The cost is
-that everything lives in one process on one machine, which the course setup
-fixes anyway.
+The page paints itself, so the server only needs to keep an anonymous identity,
+the planted flowers, who is here, and the time people have spent together.
+Node runs the TypeScript directly, so I test the same code I deploy. Everything
+lives in one process on one machine, which fits the course setup.
 
-One decision was about the client rather than the server: the Monet day is
-some 25,000 brush dabs, painted once to a canvas and shown as a few images
-instead of 25,000 SVG paths.
+On the client, the Monet day uses about 25,000 brush dabs. The page paints
+them once to a canvas and shows the result as a few images instead of keeping
+25,000 SVG paths.
 
 ## Where it stands
 
-A stranger can sow, come back and find their flower; the garden counts who is
-here and who just left, and grows only with company. Other people's flowers
-arrive by polling every fifteen seconds; crit 9 replaces that with a push.
+Someone can sow a flower, leave, and find it again when they come back. The
+garden counts who is here and who just left, and grows only with company. For
+now, other people's flowers appear through polling every fifteen seconds. I
+plan to replace that with a push in crit 9.
 
 [To write: my position on what I read about software at this scale, and how
 it changed the definition of good in `README.md`.]
