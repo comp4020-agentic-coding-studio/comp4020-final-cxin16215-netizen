@@ -1,11 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { ECHO_WINDOW_MS, presence, warm, type Presence, type Sowing } from "./garden.ts";
+import { ECHO_WINDOW_MS, presence, tend, warm, wildFor, wildNow, type Presence, type Sowing } from "./garden.ts";
 
 // Everything the garden remembers, in one SQLite file on the volume: who
-// planted what where, when each visitor was last seen, and the garden's
-// running total of time spent together.
+// planted what where, when each visitor was last seen, the garden's running
+// total of time spent together, and how tended it is.
 
 export type Flower = {
   id: number;
@@ -16,7 +16,8 @@ export type Flower = {
   warmthAt: number;
   mine: boolean;
 };
-export type Garden = Presence & { now: number; warmth: number; flowers: Flower[] };
+export type Tending = { warmth: number; care: number; wild: number; wildNext: number };
+export type Garden = Presence & Tending & { now: number; flowers: Flower[] };
 
 type FlowerRow = {
   id: number;
@@ -49,8 +50,17 @@ export function openStore(dir: string) {
       warmth REAL NOT NULL,
       updated_at INTEGER NOT NULL
     );
-    INSERT OR IGNORE INTO garden VALUES (1, 0, 0);
+    INSERT OR IGNORE INTO garden (id, warmth, updated_at) VALUES (1, 0, 0);
   `);
+  // gardens made before care existed start part-tended, with the 45 wild flowers they had
+  const cols = (db.prepare("PRAGMA table_info(garden)").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes("care")) {
+    db.exec(`
+      ALTER TABLE garden ADD COLUMN care REAL NOT NULL DEFAULT 0.4;
+      ALTER TABLE garden ADD COLUMN wild INTEGER NOT NULL DEFAULT 45;
+      ALTER TABLE garden ADD COLUMN wild_year INTEGER NOT NULL DEFAULT -1;
+    `);
+  }
 
   const q = {
     flowers: db.prepare("SELECT id, species, x, y, planted_at, warmth_at, visitor FROM flowers ORDER BY id"),
@@ -64,8 +74,8 @@ export function openStore(dir: string) {
     ),
     recent: db.prepare("SELECT last_seen FROM visits WHERE last_seen > ?"),
     forget: db.prepare("DELETE FROM visits WHERE last_seen <= ?"),
-    warmth: db.prepare("SELECT warmth, updated_at FROM garden WHERE id = 1"),
-    setWarmth: db.prepare("UPDATE garden SET warmth = ?, updated_at = ? WHERE id = 1"),
+    tending: db.prepare("SELECT warmth, care, wild, wild_year, updated_at FROM garden WHERE id = 1"),
+    setTending: db.prepare("UPDATE garden SET warmth = ?, care = ?, wild = ?, wild_year = ?, updated_at = ? WHERE id = 1"),
   };
 
   const count = (row: unknown): number => (row as { n: number }).n;
@@ -74,18 +84,23 @@ export function openStore(dir: string) {
       (q.recent.all(now - ECHO_WINDOW_MS) as { last_seen: number }[]).map((r) => r.last_seen),
       now,
     );
-  const warmthAt = (now: number, people: number): number => {
-    const g = q.warmth.get() as { warmth: number; updated_at: number };
-    return warm(g.warmth, g.updated_at, now, people);
+  type Row = { warmth: number; care: number; wild: number; wild_year: number; updated_at: number };
+  // the garden's tending carried forward to now, counting whoever is here; a garden never updated has no gap
+  const tendingAt = (now: number, people: number): Tending & { year: number } => {
+    const g = q.tending.get() as Row;
+    const since = g.updated_at || now;
+    const care = tend(g.care, since, now, people);
+    const { wild, year } = wildNow(g.wild, g.wild_year, care, now);
+    return { warmth: warm(g.warmth, since, now, people), care, wild, wildNext: wildFor(care), year };
   };
 
-  // being seen moves the garden's warmth on to now, counting whoever was here
-  const see = (visitor: string, now: number): Presence & { warmth: number } => {
+  // being seen moves the garden on to now and keeps it there
+  const see = (visitor: string, now: number): Presence & Tending => {
     q.seen.run(visitor, now);
     const p = presenceAt(now);
-    const warmth = warmthAt(now, p.people);
-    q.setWarmth.run(warmth, now);
-    return { ...p, warmth };
+    const { year, ...t } = tendingAt(now, p.people);
+    q.setTending.run(t.warmth, t.care, t.wild, year, now);
+    return { ...p, ...t };
   };
 
   return {
@@ -101,10 +116,11 @@ export function openStore(dir: string) {
         warmthAt: r.warmth_at,
         mine: r.visitor === visitor,
       }));
-      return { now, ...p, warmth: warmthAt(now, p.people), flowers };
+      const { year: _year, ...t } = tendingAt(now, p.people);
+      return { now, ...p, ...t, flowers };
     },
 
-    heartbeat(visitor: string, now: number): Presence & { now: number; warmth: number } {
+    heartbeat(visitor: string, now: number): Presence & Tending & { now: number } {
       q.forget.run(now - ECHO_WINDOW_MS);
       return { now, ...see(visitor, now) };
     },

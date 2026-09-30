@@ -59,6 +59,40 @@ export function warm(warmth: number, since: number, now: number, people: number)
   return warmth + dt * Math.max(0, people - 1);
 }
 
+// Care is how tended the garden is, from 0 (gone wild) to 1. Time together
+// raises it: two people take five minutes to bring a bare garden back, five
+// people little more than one. Without company it fades, halving in about
+// four hours, so a garden left for a week is nearly wild again. A gap longer
+// than a heartbeat only ever counts as neglect.
+export const CARE_UP_S = 300;
+export const CARE_TAU_MS = 6 * 3600_000;
+
+export function tend(care: number, since: number, now: number, people: number): number {
+  const gap = Math.max(0, now - since);
+  const live = Math.min(gap, HERE_MS);
+  let c = care * Math.exp(-(gap - live) / CARE_TAU_MS);
+  if (people >= 2) c += (live / 1000) * ((people - 1) / CARE_UP_S);
+  else c *= Math.exp(-live / CARE_TAU_MS);
+  return Math.min(1, c);
+}
+
+// How many of the planned wild flowers are up. There is always some wild
+// garden left, however long nobody comes.
+export const WILD = { min: 12, max: 95 } as const;
+export const wildFor = (care: number): number => Math.round(WILD.min + (WILD.max - WILD.min) * care);
+
+// The garden's year, on the same clock the page draws with: a garden day is a
+// real minute and a season two.
+export const YEAR_MS = 8 * 60_000;
+
+// Wild flowers come up whenever the garden is tended, but they are only lost
+// over winter: a new year keeps as many as its care can carry.
+export function wildNow(wild: number, year: number, care: number, now: number): { wild: number; year: number } {
+  const thisYear = Math.floor(now / YEAR_MS);
+  const target = wildFor(care);
+  return thisYear !== year ? { wild: target, year: thisYear } : { wild: Math.max(wild, target), year };
+}
+
 export type Sowing = { species: Species; x: number; y: number };
 
 export function validSowing(body: unknown): Sowing | null {
