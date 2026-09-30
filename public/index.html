@@ -120,6 +120,7 @@
     </div>
     <span id="counts"></span>
     <button id="sow" class="sow" type="button">Sow somewhere</button>
+    <button id="music" type="button" aria-pressed="false">♪ Listen</button>
     <a class="about" href="readme/">About this garden</a>
   </div>
   <div class="row">
@@ -667,6 +668,7 @@ function lightning(){
   el('path',{d,fill:'none',stroke:'#fff6d0','stroke-width':7,opacity:.3,'stroke-linejoin':'round'},boltSvg);
   el('path',{d,fill:'none',stroke:'#ffffff','stroke-width':2.2,'stroke-linejoin':'round'},boltSvg);
   boltLife=.35;
+  thunder();
   // the second flicker a real strike has; two flashes, well inside the three-per-second limit
   if(!REDUCED)setTimeout(()=>{flashAmt=Math.max(flashAmt,.32)},140);
 }
@@ -1214,7 +1216,7 @@ async function sow(x,y){
   }else F={id:-(++localSown),species:sp.id,x,y,plantedAt:gardenNow(),warmthAt:warmth,mine:true};
   const before=wildOn.size,f=plant(F,true);
   if(!f)return;
-  syncWild();drawFlower(f);
+  syncWild();drawFlower(f);plantSound(f);
   const seed=lifeOf(f).seed,replaced=wildOn.size<before;
   say(`You planted a ${sp.name.toLowerCase()}${seed?' seed':''}${replaced?' in place of a wildflower':''}${seed?`. It won't sprout until ${SEASONS[Math.floor(LIFE[sp.id][0])]}`:''}`);
 }
@@ -1272,6 +1274,131 @@ function fitView(){
   VX=vx;VY=vy;VW=vw;VH=vh;
 }
 
+// The garden's music. Nothing is recorded: every sound is made here from what the garden is doing. Each kind of
+// flower has its register (sunflowers low, forget-me-nots high) and sings from the harmony of the moment, which
+// follows the shared clock, so people in the garden together hear it in the same key. Alone there is one low
+// voice; each person more adds a voice to the chord and lets more of the flowers sing. It stays off until asked.
+const REG={sunflower:0,marigold:1,cosmos:1,poppy:2,tulip:2,bell:3,lavender:3,lily:4,forget:4};
+const CHORDS={
+  // by day, open major ninths around D; by night, the minor side of the same key, lower and slower
+  day:[[50,57,61,64,66],[43,50,54,57,61],[47,54,57,62,64],[45,52,57,59,64]],
+  night:[[40,47,50,54,55],[36,43,47,52,54],[33,40,48,52,55],[35,42,45,50,52]],
+};
+const CHORD_MS=7500;
+const hz=m=>440*Math.pow(2,(m-69)/12);
+const music={on:false,M:null};
+function musicGraph(ctx){
+  const M={ctx,chord:-1,cur:CHORDS.day[0],nextBeat:0,nextChirp:0};
+  M.master=ctx.createGain();M.master.gain.value=0;
+  const comp=ctx.createDynamicsCompressor();comp.threshold.value=-18;comp.ratio.value=4;
+  M.master.connect(comp);comp.connect(ctx.destination);
+  // the noise everything else is shaped from: rain, thunder and the room itself
+  const n=ctx.sampleRate*2;M.noise=ctx.createBuffer(1,n,ctx.sampleRate);
+  {const d=M.noise.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1}
+  const len=ctx.sampleRate*3,ir=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)}
+  const verb=ctx.createConvolver(),wet=ctx.createGain();verb.buffer=ir;wet.gain.value=.45;verb.connect(wet);wet.connect(M.master);
+  M.dry=ctx.createGain();M.dry.connect(M.master);M.dry.connect(verb);
+  M.padTone=ctx.createBiquadFilter();M.padTone.type='lowpass';M.padTone.frequency.value=1400;M.padTone.connect(M.dry);
+  const rain=ctx.createBufferSource(),hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter();
+  rain.buffer=M.noise;rain.loop=true;hp.type='highpass';hp.frequency.value=900;lp.type='lowpass';lp.frequency.value=5000;
+  M.rain=ctx.createGain();M.rain.gain.value=0;
+  rain.connect(hp);hp.connect(lp);lp.connect(M.rain);M.rain.connect(M.dry);rain.start();
+  return M;
+}
+// a soft bell: the fundamental and two quieter, quicker partials
+function note(M,t,freq,{gain=.08,decay=2.5,pan=0,bright=1}={}){
+  const {ctx}=M,g=ctx.createGain(),p=ctx.createStereoPanner();
+  p.pan.value=Math.max(-1,Math.min(1,pan));
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(gain,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+decay);
+  g.connect(p);p.connect(M.dry);
+  for(const[r,a,d]of[[1,1,1],[2.76,.22*bright,.35],[5.4,.06*bright,.15]]){
+    const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=freq*r;
+    og.gain.setValueAtTime(a,t);og.gain.exponentialRampToValueAtTime(.0001,t+decay*d);
+    o.connect(og);og.connect(g);o.start(t);o.stop(t+decay+.05);
+  }
+}
+// where a flower sits decides which note of the chord it sings, so the same flower always sings the same way
+function flowerNote(f,chord,low){
+  const pcs=chord.map(m=>m%12),base=55+REG[f.sp.id]*6-(low?12:0),opts=[];
+  for(let m=base;m<base+12;m++)if(pcs.includes(m%12))opts.push(m);
+  return opts[Math.abs(Math.round(f.x*7+f.y*13))%opts.length];
+}
+function pad(M,t,chord,voices,dur){
+  chord.slice(0,voices).forEach((m,i)=>{
+    const g=M.ctx.createGain(),a=i?.03:.045;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+2.5);g.gain.setValueAtTime(a,t+dur);g.gain.linearRampToValueAtTime(0,t+dur+3);
+    g.connect(M.padTone);
+    for(const cents of[-4,4]){const o=M.ctx.createOscillator();o.type='triangle';o.frequency.value=hz(m);o.detune.value=cents;o.connect(g);o.start(t);o.stop(t+dur+3.1)}
+  });
+}
+// thunder comes a moment after the flash, low and rolling rather than a crack
+function thunder(){
+  const M=music.M;if(!music.on||!M)return;
+  const {ctx}=M,t=ctx.currentTime+.4+Math.random()*1.2,s=ctx.createBufferSource(),lp=ctx.createBiquadFilter(),g=ctx.createGain();
+  s.buffer=M.noise;s.loop=true;lp.type='lowpass';lp.frequency.setValueAtTime(260,t);lp.frequency.exponentialRampToValueAtTime(70,t+4);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.45,t+.25);g.gain.exponentialRampToValueAtTime(.001,t+4.5);
+  s.connect(lp);lp.connect(g);g.connect(M.dry);s.start(t);s.stop(t+4.6);
+}
+function chirp(M,t,amt){
+  const {ctx}=M,o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner();
+  o.frequency.value=4300+Math.random()*500;p.pan.value=Math.random()*1.6-.8;g.gain.value=0;
+  for(let i=0;i<3;i++){const s=t+i*.05;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.02*amt,s+.008);g.gain.linearRampToValueAtTime(0,s+.03)}
+  o.connect(g);g.connect(p);p.connect(M.master);o.start(t);o.stop(t+.2);
+}
+function plantSound(f){
+  const M=music.M;if(!music.on||!M)return;
+  note(M,M.ctx.currentTime+.02,hz(flowerNote(f,M.cur,true)),{gain:.05,decay:1.2,bright:.3,pan:(f.x-600)/700});
+}
+function tickMusic(){
+  const M=music.M;if(!music.on||!M)return;
+  const now=M.ctx.currentTime,low=night>.5,t0=gardenNow(),ci=Math.floor(t0/CHORD_MS);
+  if(ci!==M.chord){
+    M.chord=ci;M.cur=CHORDS[low?'night':'day'][ci%4];
+    M.padTone.frequency.setTargetAtTime(low?520:1400,now,2);
+    pad(M,now+.05,M.cur,people,(CHORD_MS-t0%CHORD_MS)/1000);
+  }
+  const open=[];
+  for(const f of flowers){
+    const L=lifeOf(f),o=!L.seed&&Math.min(L.g,f.p)>.7&&L.k<.4;
+    // a flower coming into bloom rings once
+    if(o&&f.sang===false)note(M,now+.02+Math.random()*.3,hz(flowerNote(f,M.cur,low)),{gain:.08,decay:low?4:3,pan:(f.x-600)/700});
+    f.sang=o;if(o)open.push(f);
+  }
+  if(now>=M.nextBeat-.1){
+    const beat=low?1.6:.8,t=Math.max(now,M.nextBeat);M.nextBeat=t+beat;
+    // the more in bloom and the more company, the more the garden sings; alone, it only hums
+    const chance=Math.min(1,open.length/25)*(people-1)/4*.8;
+    if(open.length&&Math.random()<chance){
+      const f=open[Math.floor(Math.random()*open.length)];
+      note(M,t+Math.random()*.08,hz(flowerNote(f,M.cur,low)),{gain:.055,decay:low?3.5:2.2,pan:(f.x-600)/700,bright:low?.5:1});
+    }
+    if(flyAmt>.3&&Math.random()<.25*flyAmt)note(M,t+beat/2,hz(84+M.cur[Math.floor(Math.random()*5)]%12),{gain:.02,decay:1.5,pan:Math.random()*1.6-.8});
+  }
+  M.rain.gain.setTargetAtTime(stormAmt*.16,now,.5);
+  const crickets=night*(season>.4&&season<2.6?1:0)*(1-stormAmt);
+  if(crickets>.2&&now>=M.nextChirp){chirp(M,now+.02,crickets);M.nextChirp=now+.35+Math.random()*1.1}
+}
+async function toggleMusic(){
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC)return say("This browser can't play the garden's music");
+  music.on=!music.on;
+  const b=$('music');b.setAttribute('aria-pressed',music.on);b.textContent=music.on?'♪ Quiet':'♪ Listen';
+  if(!music.M)music.M=musicGraph(new AC());
+  const M=music.M,now=M.ctx.currentTime;
+  M.master.gain.cancelScheduledValues(now);
+  if(music.on){
+    await M.ctx.resume();
+    M.chord=-1;M.nextBeat=M.ctx.currentTime+.5;for(const f of flowers)delete f.sang;
+    M.master.gain.setTargetAtTime(.8,M.ctx.currentTime,.8);
+    say('The garden is playing');
+  }else{M.master.gain.setTargetAtTime(0,now,.3);setTimeout(()=>{if(!music.on)M.ctx.suspend()},1500)}
+}
+document.addEventListener('visibilitychange',()=>{
+  const M=music.M;if(!M||!music.on)return;
+  if(document.hidden)M.ctx.suspend();else{M.ctx.resume();M.chord=-1}
+});
+
 let last=performance.now(),lastDraw=0,lastUi=-1e9,lastStatus='',lastCounts='';
 function frame(now){
   const dt=Math.min(.1,(now-last)/1000);last=now;
@@ -1293,6 +1420,7 @@ function frame(now){
   updateStorm(dt);
   updateFireflies(dt,now/1000);
   updateCritters(dt,now/1000);
+  tickMusic();
   if(now-lastDraw>60){lastDraw=now;for(const f of flowers)drawFlower(f)}
   if(now-lastUi>200){
     lastUi=now;
@@ -1341,6 +1469,7 @@ if(speed<1)$('speed').value='slow';
 if(LIVE)$('speed').parentElement.style.display='none';
 $('people').addEventListener('input',e=>{peopleOverride=true;people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
 $('care').addEventListener('input',e=>{careOverride=true;care=+e.target.value;wildN=wildNext=wildFor(care);$('careOut').textContent=care.toFixed(2);syncWild()});
+$('music').addEventListener('click',toggleMusic);
 $('speed').addEventListener('change',e=>{speed=e.target.value==='slow'?.1:1});
 const stopAuto=()=>{auto=false;$('auto').checked=false};
 $('hour').addEventListener('input',e=>{stopAuto();hour=+e.target.value;lastUi=-1e9});
