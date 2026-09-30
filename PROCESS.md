@@ -84,5 +84,22 @@ garden counts who is here and who just left, and grows only with company. For
 now, other people's flowers appear through polling every fifteen seconds. I
 plan to replace that with a push in crit 9.
 
-[To write: my position on what I read about software at this scale, and how
-it changed the definition of good in `README.md`.]
+## What I read, and where I stand
+
+Of what I read about good software at this scale, Clay Shirky's
+["Situated Software"](http://shirky.com/essays/situated-software/) (2004) fits
+the garden most closely: software built in and for one social situation, taken
+up because it was made for the people using it, and allowed to stay small. I
+agree with him that not scaling is a fair price here. The garden is for
+whoever is present at the same moment, and it runs on one machine by design.
+
+Where I part from him is lifespan. He accepts that situated software may not
+last, and the garden may well end with the course. But while it is open, a
+trace someone leaves must not disappear, because that is the one promise it
+makes to a stranger. Reading him is what made me add that limit to the claim in
+`README.md`.
+
+I also read Mike Caulfield's "The Garden and the Stream" (2015). Despite the
+name, it is about how knowledge is organised on the web, linked and reworked
+rather than scrolled past in a feed, not about people being present together,
+so I did not draw on it.
