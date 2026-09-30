@@ -42,6 +42,12 @@ before changing anything.
   that didn't show, a header lost against the clouds) were found by looking.
 - Keeps `public/index.html` working when opened as a file: that is the offline
   sketch with the debug controls, and where visual work happens.
+- Keeps the console a preview. The backquote key (or `?debug`) opens controls
+  for showing the garden, which change only what this browser shows: they never
+  write to the server, change anyone else's garden, or make anything grow
+  faster, and the status line says "Preview" while they are in use. Five
+  people are hard to gather for a demo, so a preview is allowed; a way to fake
+  company for everyone is not.
 - Keeps the twin numbers in step: species, the ground, presence and growth are
   in both `server/garden.ts` and `public/index.html`.
 - Says in its commit message what changed and why, in a commit of its own.

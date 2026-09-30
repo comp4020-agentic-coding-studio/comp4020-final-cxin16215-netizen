@@ -1049,7 +1049,9 @@ function addFlower(sp,x,y,p,mine,fresh){
 // live, the server says who is here (and who was here a moment ago); ?people= overrides it to look at the garden
 let people=Math.min(5,Math.max(1,parseInt(q.get('people'))||(LIVE?1:5)));
 let speed=q.get('speed')==='slow'?.1:1;
-let wilt=people===1?1:0,presenceInfo={here:people,echo:0};
+let wilt=people===1?1:0,presenceInfo={here:people,echo:0,people:LIVE?1:people};
+// set when this browser is previewing a number of people rather than showing who is really here
+let peopleOverride=q.has('people');
 // time spent together, in person-seconds beyond the first person: the server keeps the total, the page follows it
 let warmth=0;
 const GROW_W=30,WILD={every:20};
@@ -1164,8 +1166,9 @@ function applyColors(){
 
 function statusText(){
   const back=NAMES.filter(n=>people>=UNLOCK[n[1]]).map(n=>n[0]);
-  const here=LIVE&&!q.has('people')?presenceInfo.here:people;
-  const who=`${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`;
+  const here=LIVE&&!peopleOverride?presenceInfo.here:people;
+  const who=LIVE&&peopleOverride?`Preview: ${people} ${people===1?'person':'people'}`
+    :`${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`;
   const s=people===1?'just you, so the garden is waiting':(flowers.length>=MAX?'the garden is full':'the garden is growing');
   return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
 }
@@ -1200,7 +1203,7 @@ async function sow(x,y){
 // and a refresh brings in what everyone else has planted
 function applyPresence(P){
   presenceInfo=P;
-  if(q.has('people')||P.people===people)return;
+  if(peopleOverride||P.people===people)return;
   people=P.people;$('people').value=people;$('peopleOut').textContent=people;applyColors();
 }
 async function heartbeat(){
@@ -1254,7 +1257,8 @@ function frame(now){
   const dt=Math.min(.1,(now-last)/1000);last=now;
   if(!FREEZE){
     // between the server's answers the page keeps time together the same way the server does
-    warmth+=dt*Math.max(0,people-1)*(LIVE?1:speed);
+    // a preview of more people changes only the colours on this screen, never how fast anything grows
+    warmth+=dt*Math.max(0,(LIVE?presenceInfo.people:people)-1)*(LIVE?1:speed);
     for(const f of flowers)f.p=grown(f);
     if(wildCount()!==lastWildN)syncWild();
     wilt+=((people===1?1:0)-wilt)*Math.min(1,dt*.8);
@@ -1313,7 +1317,9 @@ const WILD_BASE=q.has('n')?Math.min(MAX,+q.get('n')):LIVE?45:95;
 syncWild();
 $('people').value=people;$('peopleOut').textContent=people;
 if(speed<1)$('speed').value='slow';
-$('people').addEventListener('input',e=>{people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
+// pace only drives the offline sketch; live, growth follows the server's time together
+if(LIVE)$('speed').parentElement.style.display='none';
+$('people').addEventListener('input',e=>{peopleOverride=true;people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
 $('speed').addEventListener('change',e=>{speed=e.target.value==='slow'?.1:1});
 const stopAuto=()=>{auto=false;$('auto').checked=false};
 $('hour').addEventListener('input',e=>{stopAuto();hour=+e.target.value;lastUi=-1e9});
@@ -1328,6 +1334,16 @@ const FX={
 };
 for(const b of document.querySelectorAll('[data-fx]'))b.addEventListener('click',()=>FX[b.dataset.fx]());
 if(FX[q.get('fx')])setTimeout(FX[q.get('fx')],300);
+// A quiet console for showing the garden: the backquote key opens the controls for looking around (people,
+// hour, season, the seasonal moments) and closing it returns to what is real. It only ever changes what this
+// browser shows; nothing in it reaches the server or anyone else's garden.
+addEventListener('keydown',e=>{
+  if(e.code!=='Backquote'||e.ctrlKey||e.metaKey||e.altKey||e.repeat)return;
+  if(root.classList.toggle('debug'))return fitView();
+  if(!q.has('people')&&peopleOverride){peopleOverride=false;people=presenceInfo.people;$('people').value=people;$('peopleOut').textContent=people;applyColors()}
+  if(!q.has('hour')&&!q.has('season')&&!FREEZE){auto=true;$('auto').checked=true}
+  fitView();
+});
 addEventListener('resize',fitView);
 updateSeason();
 updateSky();
