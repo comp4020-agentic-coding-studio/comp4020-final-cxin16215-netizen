@@ -27,8 +27,10 @@ before changing anything.
   `PORT=8080 DATA_DIR=.data-test node server/main.ts` (delete `.data-test`
   first), then `pnpm check`.
 - Never runs the spec against the deployed app: the tests plant real flowers
-  in the real garden. This happened once, on 2026-09-30, and the test flowers
-  had to be cleared by hand.
+  in the real garden. This happened once, on 2026-09-30, and left three test
+  flowers and a stretch of made-up company in the live garden.
+- Never writes to the live database from a remote shell; that is mine to do,
+  by hand.
 - Starts with a failing test when it adds a promise the server keeps. Commit
   the red test, then the change that turns it green.
 - Is looked at, not only tested, when it changes what the garden looks like:
