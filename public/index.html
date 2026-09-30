@@ -57,6 +57,24 @@
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .sow{border-color:var(--ink)}
   .about{color:var(--ink-soft);font-size:13px}
+  /* on a phone the controls keep to two short rows so the garden keeps the screen: the kinds of flower
+     become one row you swipe along, fading at the edge to say there are more */
+  @media (max-width:560px){
+    #controls{left:10px;right:10px;bottom:10px;max-width:calc(100% - 20px);width:auto;padding:10px 12px;gap:8px;font-size:13px}
+    #controls>.row:first-child{gap:8px}
+    :root:not(.debug) #controls>.row:first-child{flex-wrap:nowrap}
+    #controls>.row:first-child .about{white-space:nowrap}
+    #counts{display:none}
+    .sow,#music{white-space:nowrap}
+    .about .wide{display:none}
+    #controls>.row:nth-child(2){justify-content:flex-start}
+    #picker{min-width:0;width:100%;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:5px 2px 3px;margin:0 -4px;
+      -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+    #picker::-webkit-scrollbar{display:none}
+    #picker legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .chip{flex:none}
+    .row.debug,.fx{gap:6px 10px}
+  }
   /* the controls for looking at the garden rather than being in it: ?debug, or opened as a file */
   :root:not(.debug) .debug{display:none}
   #announce{position:fixed;z-index:16;left:50%;bottom:calc(var(--ctl,140px) + 28px);transform:translateX(-50%);margin:0;max-width:calc(100% - 32px);padding:6px 14px;border-radius:999px;background:rgba(47,42,38,.84);color:#f2ece1;font-size:14px;text-align:center;opacity:0;transition:opacity .3s ease;pointer-events:none}
@@ -121,7 +139,7 @@
     <span id="counts"></span>
     <button id="sow" class="sow" type="button">Sow somewhere</button>
     <button id="music" type="button" aria-pressed="false">♪ Listen</button>
-    <a class="about" href="readme/">About this garden</a>
+    <a class="about" href="readme/" aria-label="About this garden">About<span class="wide"> this garden</span></a>
   </div>
   <div class="row">
     <fieldset id="picker"><legend>Plant <span class="hint">· dot = sprouts now</span></legend></fieldset>
