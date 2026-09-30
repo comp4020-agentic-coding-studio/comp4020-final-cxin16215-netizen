@@ -18,21 +18,22 @@
   html,body{margin:0;height:100%}
   body{background:var(--paper);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;overflow:hidden}
   .layer{position:fixed;inset:0;width:100%;height:100%;display:block}
-  #paper{z-index:0}#sky{z-index:1}#celestial{z-index:2}#bg{z-index:3}#starry{z-index:4;opacity:0}#fg{z-index:5;cursor:crosshair}
-  #near{z-index:6;pointer-events:none}#corner{z-index:7;pointer-events:none}#weather{z-index:8;pointer-events:none}
-  #tint{position:fixed;inset:0;z-index:9;pointer-events:none;mix-blend-mode:multiply;background:#fff}
-  #night{z-index:10;pointer-events:none;opacity:0}#bolt{z-index:11;pointer-events:none}
-  #flash{position:fixed;inset:0;z-index:11;pointer-events:none;background:#f4f6ff;opacity:0}
-  #motes{z-index:12;pointer-events:none}
-  /* the night style follows the presence colours too: charcoal until enough people bring the blues and yellows back */
-  #starry,#night{filter:grayscale(1);transition:filter 2.4s ease}
-  .u-blue #starry,.u-yellow #night{filter:none}
-  header{position:fixed;z-index:13;top:0;left:0;right:0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding:16px;font-size:14px;letter-spacing:.06em;color:var(--ink-soft);pointer-events:none;transition:color 1.5s ease,text-shadow 1.5s ease;text-shadow:0 0 3px rgba(242,236,225,.95),0 0 10px rgba(242,236,225,.8)}
+  #paper{z-index:0}#sky{z-index:1}#daySky{z-index:2}#celestial{z-index:3}#bg{z-index:4}#dayLand{z-index:5}#starry{z-index:6;opacity:0}#fg{z-index:7;cursor:crosshair}
+  #near{z-index:8;pointer-events:none}#corner{z-index:9;pointer-events:none}#weather{z-index:10;pointer-events:none}
+  #tint{position:fixed;inset:0;z-index:11;pointer-events:none;mix-blend-mode:multiply;background:#fff}
+  #night{z-index:12;pointer-events:none;opacity:0}#bolt{z-index:13;pointer-events:none}
+  #flash{position:fixed;inset:0;z-index:13;pointer-events:none;background:#f4f6ff;opacity:0}
+  #motes{z-index:14;pointer-events:none}
+  #daySky,#dayLand{pointer-events:none}
+  /* both painted styles follow the presence colours: charcoal until enough people bring their families back */
+  #starry,#night,#daySky,#dayLand{filter:grayscale(1);transition:filter 2.4s ease}
+  .u-blue #starry,.u-yellow #night,.u-blue #daySky,.u-green #dayLand{filter:none}
+  header{position:fixed;z-index:15;top:0;left:0;right:0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding:16px;font-size:14px;letter-spacing:.06em;color:var(--ink-soft);pointer-events:none;transition:color 1.5s ease,text-shadow 1.5s ease;text-shadow:0 0 3px rgba(242,236,225,.95),0 0 10px rgba(242,236,225,.8)}
   /* a soft halo keeps the header legible over mottled cloud and sky, not only over plain paper */
   .dark header{color:#ece7dc;text-shadow:0 0 3px rgba(22,26,40,.9),0 0 10px rgba(22,26,40,.75)}
   header p{margin:0}
   input[type=checkbox]{accent-color:var(--ink);margin:0}
-  #controls{position:fixed;z-index:13;left:16px;right:16px;bottom:16px;margin:0 auto;width:fit-content;max-width:calc(100% - 32px);display:flex;flex-direction:column;gap:10px;padding:12px 18px;background:rgba(242,236,225,.88);border:1px solid var(--line);border-radius:20px;font-size:14px}
+  #controls{position:fixed;z-index:15;left:16px;right:16px;bottom:16px;margin:0 auto;width:fit-content;max-width:calc(100% - 32px);display:flex;flex-direction:column;gap:10px;padding:12px 18px;background:rgba(242,236,225,.88);border:1px solid var(--line);border-radius:20px;font-size:14px}
   .row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 18px}
   .field{display:flex;align-items:center;gap:8px}
   input[type=range]{width:130px;accent-color:var(--ink)}
@@ -55,7 +56,7 @@
   .fx button{font-size:13px;padding:3px 10px}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .sow{border-color:var(--ink)}
-  #announce{position:fixed;z-index:14;left:50%;bottom:calc(var(--ctl,140px) + 28px);transform:translateX(-50%);margin:0;max-width:calc(100% - 32px);padding:6px 14px;border-radius:999px;background:rgba(47,42,38,.84);color:#f2ece1;font-size:14px;text-align:center;opacity:0;transition:opacity .3s ease;pointer-events:none}
+  #announce{position:fixed;z-index:16;left:50%;bottom:calc(var(--ctl,140px) + 28px);transform:translateX(-50%);margin:0;max-width:calc(100% - 32px);padding:6px 14px;border-radius:999px;background:rgba(47,42,38,.84);color:#f2ece1;font-size:14px;text-align:center;opacity:0;transition:opacity .3s ease;pointer-events:none}
   #announce.show{opacity:1}
   .ready .wash{transition:fill 2.4s ease}
   .ready .fl{transition:--c1 2.4s ease,--c2 2.4s ease,--st 2.4s ease,--lf 2.4s ease}
@@ -75,9 +76,11 @@
   <rect width="100%" height="100%" filter="url(#grain)" opacity=".7"/>
 </svg>
 <svg id="sky" class="layer" aria-hidden="true"></svg>
+<svg id="daySky" class="layer" aria-hidden="true"></svg>
 <svg id="celestial" class="layer" aria-hidden="true"></svg>
 <svg id="starry" class="layer" aria-hidden="true"></svg>
 <svg id="bg" class="layer" aria-hidden="true"></svg>
+<svg id="dayLand" class="layer" aria-hidden="true"></svg>
 <svg id="fg" class="layer" aria-hidden="true"><defs id="defs"></defs></svg>
 <svg id="near" class="layer" aria-hidden="true">
   <defs><filter id="dof" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>
@@ -144,7 +147,7 @@
 const NS='http://www.w3.org/2000/svg';
 const $=id=>document.getElementById(id);
 const root=document.documentElement,bg=$('bg'),fg=$('fg'),defs=$('defs'),near=$('near'),motesSvg=$('motes');
-const celestial=$('celestial'),weather=$('weather'),nightSvg=$('night'),tintEl=$('tint'),skySvg=$('sky'),starry=$('starry'),cornerSvg=$('corner'),boltSvg=$('bolt'),flashEl=$('flash');
+const daySky=$('daySky'),dayLand=$('dayLand'),celestial=$('celestial'),weather=$('weather'),nightSvg=$('night'),tintEl=$('tint'),skySvg=$('sky'),starry=$('starry'),cornerSvg=$('corner'),boltSvg=$('bolt'),flashEl=$('flash');
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const q=new URLSearchParams(location.search);
 const FREEZE=q.has('static');
@@ -412,6 +415,88 @@ function buildStarry(){
     for(let s=0;s<4;s++){x+=L/4;y+=Math.sin(x/90+y/40)*2.2;d+=`L${f1(x)} ${f1(y)}`}
     el('path',{d,stroke:HILL[Math.floor(rand()*HILL.length)],'stroke-width':(3+rand()*2.5).toFixed(1),opacity:.8},g);
   }
+}
+
+// By day the backdrop is laid in the way Monet painted a meadow: short loaded dabs of unmixed colour side by side,
+// clouds in cream and lilac, distant poppies as single flecks, shadows violet rather than grey. Tens of thousands of
+// dabs would be tens of thousands of SVG paths, so each picture is painted once onto a canvas and shown as one image.
+const DAB_K=1.25,SKY_BOX={x:-400,y:-300,w:2000,h:940},LAND_BOX={x:-400,y:540,w:2000,h:400};
+const pick=a=>a[Math.floor(rand()*a.length)];
+const jit=(c,amt=1)=>{const r=rand();return r<.55?mix(c,'#ffffff',r*.3*amt):mix(c,'#3b3552',(r-.55)*.16*amt)};
+function dab(ctx,x,y,len,w,ang,col,a){
+  const c=Math.cos(ang),s=Math.sin(ang),dx=c*len/2,dy=s*len/2,b=(rand()-.5)*len*.5;
+  ctx.globalAlpha=a;ctx.strokeStyle=col;ctx.lineWidth=w;
+  ctx.beginPath();ctx.moveTo(x-dx,y-dy);ctx.quadraticCurveTo(x-s*b,y+c*b,x+dx,y+dy);ctx.stroke();
+  // a loaded brush leaves a lighter ridge of paint along part of the stroke
+  if(rand()<.3){ctx.globalAlpha=a*.6;ctx.strokeStyle=mix(col,'#ffffff',.4);ctx.lineWidth=w*.35;ctx.beginPath();ctx.moveTo(x-dx*.7,y-dy*.7);ctx.lineTo(x+dx*.3,y+dy*.3);ctx.stroke()}
+}
+function paintImage(svg,box,seed,paint){
+  const cv=document.createElement('canvas');cv.width=Math.round(box.w*DAB_K);cv.height=Math.round(box.h*DAB_K);
+  const ctx=cv.getContext('2d');ctx.scale(DAB_K,DAB_K);ctx.translate(-box.x,-box.y);ctx.lineCap='round';
+  const keep=rand;rand=mulberry32(seed);paint(ctx);rand=keep;
+  const img=el('image',{x:box.x,y:box.y,width:box.w,height:box.h,preserveAspectRatio:'none'},svg);
+  cv.toBlob(b=>img.setAttribute('href',URL.createObjectURL(b)));
+  return img;
+}
+// the tops of the watercolour hills, so the dabs lie on the land that is already there
+function hillTop(x){let t=612;for(const[cx,cy,rx,ry]of[[360,628,540,46],[990,638,470,34]]){const u=(x-cx)/rx;if(Math.abs(u)<1)t=Math.min(t,cy-ry*Math.sqrt(1-u*u))}return t}
+const cloudN=(x,y)=>.5+.5*Math.sin(x/190+1.6*Math.sin(y/120+x/700))*Math.sin(y/95+.8*Math.sin(x/260));
+const MONET_SKY={high:['#6f98d0','#7fa6d8','#8db2de','#a5c3e6','#9fb0dc'],mid:['#98bbe2','#aac7e8','#bcd3ec','#c8c9e6','#d9e3ee'],low:['#d9dfe9','#e8ddcf','#efd9c6','#d8d0e6','#f1e6c2','#c9d8e6'],cloud:['#f7f5ef','#eef0f1','#f6efe0','#fbf8f0'],shade:['#cfc6e0','#c2c3dc','#d8cfe3','#bfc8dc'],warm:['#f6ecd8','#f3dfd0','#ece2ea','#f7f1dc']};
+function paintSky(ctx){
+  // broad strokes laid over one another: at this size a sky is a surface of paint, not a scatter of marks
+  for(let i=0;i<9000;i++){
+    const x=SKY_BOX.x+rand()*SKY_BOX.w,y=SKY_BOX.y+rand()*SKY_BOX.h;
+    if(y>hillTop(x)+8)continue;
+    const n=cloudN(x,y),cl=.92*smooth(clamp01((n-.56)/.28))*(y<540?1:.6),hz=clamp01((y-430)/170);
+    let col,ang;
+    if(rand()<cl){
+      // cloud strokes wrap round the cloud's form, along the lines of equal density; the undersides go lilac
+      const gx=cloudN(x+4,y)-cloudN(x-4,y),gy=cloudN(x,y+4)-cloudN(x,y-4);ang=Math.atan2(gy,gx)+Math.PI/2+(rand()-.5)*.5;
+      col=pick(gy<-.004?MONET_SKY.shade:hz>.3?MONET_SKY.warm:MONET_SKY.cloud);
+    }else{
+      col=pick(y<150?MONET_SKY.high:hz>.4?MONET_SKY.low:MONET_SKY.mid);
+      ang=-.3+.6*Math.sin(x/300+y/200)+(rand()-.5)*.6;
+    }
+    dab(ctx,x,y,18+rand()*16,7+rand()*5,ang,jit(col,.5),.45+rand()*.3);
+  }
+}
+// per season: hills in atmospheric violet-blue, meadow greens, sunlight, flecks of flowers, violet shadow, bare earth
+const MONET_LAND=[
+  {hill:['#a3b3d6','#b5bde0','#9fb6c9','#c9cbe6'],green:['#a9cf7c','#bcd98a','#8fbf6e','#d3e59b'],light:['#eef0c8','#f5e7a6'],fleck:['#f2b8c6','#f6f1e4','#f0d460','#b9a8e0'],shadow:['#9d9ccf','#8fa3c9'],ground:['#b9a888','#c9b89a','#a49ab8']},
+  {hill:['#95a6d0','#a9b0da','#8fa6c0','#bfc1e0'],green:['#7fae5e','#93bd67','#6d9c56','#b5cf72'],light:['#e8d77a','#f1e3a0'],fleck:['#d9533f','#e0694c','#c94b3a','#8c6cc4'],shadow:['#8d86c2','#7f93bf'],ground:['#b09a78','#c2aa84','#9a90b4']},
+  {hill:['#a39ec4','#b3a8c8','#9a9ab8','#c4b8cc'],green:['#b59a52','#c7aa5e','#a08449','#9a9a5a'],light:['#e8c472','#efd08a'],fleck:['#c4632f','#b5462f','#d98a3a','#8a6a9a'],shadow:['#8f7fb0','#7f7aa8'],ground:['#a88a66','#b89868','#8f82a4']},
+  {hill:['#c3c8dc','#d3d6e6','#b7bed6','#e2e3ec'],green:['#dfe2e6','#e9ebee','#cfd4de','#f3f3f1'],light:['#fbfaf5','#f1efe6'],fleck:['#c3c9e0','#b8b4d4','#e4dccf'],shadow:['#a9aed0','#9ea6c9'],ground:['#d8d6dc','#c9c6d4','#e6e2da']},
+];
+function paintLand(ctx,k){
+  const P=MONET_LAND[k],X=()=>LAND_BOX.x+rand()*LAND_BOX.w;
+  for(let i=0;i<3000;i++){const x=X(),top=hillTop(x);dab(ctx,x,top+2+rand()*(650-top),8+rand()*9,3.2+rand()*2,(rand()-.5)*.35,jit(pick(P.hill)),.35+rand()*.35)}
+  // the far meadow, where a field of poppies is only specks of red among the green
+  for(let i=0;i<3500;i++){const f=rand()<.22;dab(ctx,X(),612+rand()*48,f?3+rand()*3:7+rand()*8,f?3+rand()*1.5:3+rand()*1.8,f?rand()*3:(rand()-.5)*.4,jit(pick(f?P.fleck:P.green)),f?.7:.45+rand()*.3)}
+  // the near meadow stays quiet, mostly green with sunlight and violet shade, so the real flowers read against it
+  for(let i=0;i<6000;i++){
+    const x=X(),y=650+rand()*150,r=rand(),low=clamp01((y-720)/70);
+    const set=r<.08?P.light:r<.08+.3*low?P.shadow:r<.1+.3*low?P.fleck:P.green;
+    dab(ctx,x,y,10+rand()*10,4.5+rand()*3,rand()<.3?-Math.PI/2+(rand()-.5)*.6:(rand()-.5)*.5,jit(pick(set),.6),.4+rand()*.3);
+  }
+  for(let i=0;i<3500;i++)dab(ctx,X(),780+rand()*160,10+rand()*12,4+rand()*3,(rand()-.5)*.4,jit(pick(P.ground)),.3+rand()*.35);
+}
+const landImgs=[];
+function buildMonet(){
+  paintImage(daySky,SKY_BOX,1874,paintSky);
+  // the season on screen first; the rest once the page is up
+  const first=Math.floor(season)%4;
+  const make=k=>{landImgs[k]=paintImage(dayLand,LAND_BOX,1872+k,ctx=>paintLand(ctx,k));updateDay()};
+  make(first);
+  [1,2,3].forEach((d,i)=>setTimeout(()=>make((first+d)%4),400+i*250));
+}
+// seasons hold and then blend, as the garden does; the season coming in is lifted to the top so it paints over
+function updateDay(){
+  const[i,j,t]=seasonMix();
+  landImgs.forEach((img,k)=>{const o=k===i?1:k===j?t:0;setShown(img,o>0);img.setAttribute('opacity',o.toFixed(3))});
+  if(landImgs[j]&&dayLand.lastChild!==landImgs[j])dayLand.appendChild(landImgs[j]);
+  const d=1-night;
+  daySky.style.opacity=d.toFixed(3);
+  dayLand.style.opacity=(d*(1-stormAmt*.35)).toFixed(3);
 }
 
 // one branch per season reaching in from the top-right corner: cherry, pomegranate, ginkgo, snowy plum.
@@ -1066,7 +1151,7 @@ function fitView(){
   const s=Math.min(w/ROI.w,Math.max(120,h-ch-top)/ROI.h);
   const vw=w/s,vh=h/s,vx=ROI.x+ROI.w/2-vw/2,vy=ROI.y+ROI.h-(h-ch)/s;
   const vb=`${f1(vx)} ${f1(vy)} ${f1(vw)} ${f1(vh)}`;
-  for(const e of[skySvg,celestial,starry,bg,fg,near,cornerSvg,weather,nightSvg,motesSvg])e.setAttribute('viewBox',vb);
+  for(const e of[skySvg,daySky,celestial,starry,bg,dayLand,fg,near,cornerSvg,weather,nightSvg,motesSvg])e.setAttribute('viewBox',vb);
   nearL.setAttribute('transform',`translate(${f1(vx)} 0)`);
   nearR.setAttribute('transform',`translate(${f1(vx+vw)} 0)`);
   cypressG.setAttribute('transform',`translate(${f1(vx)} 0)`);
@@ -1089,6 +1174,7 @@ function frame(now){
     if(auto){hour=(hour+dt*24/60)%24;season=(season+dt/120)%4}
   }
   updateSky();
+  updateDay();
   updateSeason();
   updateCorner();
   updateWeather(dt,now/1000);
@@ -1124,6 +1210,7 @@ buildSymbols();
 buildBackground();
 buildSky();
 buildStarry();
+buildMonet();
 buildNear();
 buildCorner();
 buildWeather();
@@ -1154,6 +1241,7 @@ if(FX[q.get('fx')])setTimeout(FX[q.get('fx')],300);
 addEventListener('resize',fitView);
 updateSeason();
 updateSky();
+updateDay();
 fitView();
 updateCorner();
 updateWeather(0,0);
