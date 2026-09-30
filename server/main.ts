@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
@@ -20,9 +20,10 @@ const app = new Hono<Env>();
 
 // A visitor is whoever holds this cookie. A first request is handed one, so a
 // stranger needs nothing to begin, and coming back with it is coming back as
-// the same person.
+// the same person. The page hands it out too: it opens by asking several
+// things at once, and each would otherwise be given an identity of its own.
 const VISITOR = /^[A-Za-z0-9_-]{22}$/;
-app.use("/api/*", async (c, next) => {
+const identify: MiddlewareHandler<Env> = async (c, next) => {
   let visitor = getCookie(c, "gid");
   if (!visitor || !VISITOR.test(visitor)) {
     visitor = randomBytes(16).toString("base64url");
@@ -37,7 +38,9 @@ app.use("/api/*", async (c, next) => {
   }
   c.set("visitor", visitor);
   await next();
-});
+};
+app.use("/", identify);
+app.use("/api/*", identify);
 
 app.get("/", (c) => c.html(page));
 app.get("/readme", (c) => c.redirect("/readme/", 301));
