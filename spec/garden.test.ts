@@ -58,6 +58,21 @@ it("lets a stranger sow on their very first request", async () => {
   expect(res.headers.get("set-cookie"), "the planter is handed an identity to come back with").toBeTruthy();
 });
 
+// The page asks for several things at once as it opens (it says it's here and starts listening together).
+// If the identity only came with those answers, each would hand out its own, and one newcomer alone would
+// count as company. So the page itself hands it out.
+it("hands a newcomer their identity with the page, so one person opening it is one person", async () => {
+  const res = await fetch(url("/"));
+  const cookie = res.headers.get("set-cookie");
+  expect(cookie, "the page hands out an identity").toMatch(/^gid=/);
+  const me = cookie!.split(";")[0];
+
+  const hello = (): Promise<Response> => fetch(url("/api/presence"), { method: "POST", headers: { cookie: me } });
+  const [a, b] = await Promise.all([hello(), hello()]);
+  expect(a.headers.get("set-cookie"), "a visitor who has one isn't given another").toBeNull();
+  expect(b.headers.get("set-cookie")).toBeNull();
+});
+
 it("turns away a flower the garden can't grow", async () => {
   const me = await stranger();
   expect((await sow(me, { species: "cactus", x: 500, y: 700 })).status, "not a species here").toBe(400);
