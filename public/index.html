@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Garden prototype</title>
+<title>The garden</title>
 <style>
   @property --c1{syntax:'<color>';inherits:true;initial-value:#999}
   @property --c2{syntax:'<color>';inherits:true;initial-value:#777}
@@ -56,6 +56,9 @@
   .fx button{font-size:13px;padding:3px 10px}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .sow{border-color:var(--ink)}
+  .about{color:var(--ink-soft);font-size:13px}
+  /* the controls for looking at the garden rather than being in it: ?debug, or opened as a file */
+  :root:not(.debug) .debug{display:none}
   #announce{position:fixed;z-index:16;left:50%;bottom:calc(var(--ctl,140px) + 28px);transform:translateX(-50%);margin:0;max-width:calc(100% - 32px);padding:6px 14px;border-radius:999px;background:rgba(47,42,38,.84);color:#f2ece1;font-size:14px;text-align:center;opacity:0;transition:opacity .3s ease;pointer-events:none}
   #announce.show{opacity:1}
   .ready .wash{transition:fill 2.4s ease}
@@ -106,22 +109,23 @@
 
 <div id="controls">
   <div class="row">
-    <div class="field">
+    <div class="field debug">
       <label for="people">People here</label>
       <input id="people" type="range" min="1" max="5" step="1" value="5">
       <output id="peopleOut" for="people">5</output>
     </div>
-    <div class="field">
+    <div class="field debug">
       <label for="speed">Pace</label>
       <select id="speed"><option value="fast">Demo (fast)</option><option value="slow">Closer to real (slow)</option></select>
     </div>
     <span id="counts"></span>
     <button id="sow" class="sow" type="button">Sow somewhere</button>
+    <a class="about" href="readme/">About this garden</a>
   </div>
   <div class="row">
     <fieldset id="picker"><legend>Plant <span class="hint">· dot = sprouts now</span></legend></fieldset>
   </div>
-  <div class="row">
+  <div class="row debug">
     <div class="field">
       <label for="hour">Time of day</label>
       <input id="hour" type="range" min="0" max="23.99" step="0.05" value="9">
@@ -134,7 +138,7 @@
     </div>
     <label class="field"><input id="auto" type="checkbox" checked>Run the clock</label>
   </div>
-  <div class="row fx">
+  <div class="row fx debug">
     <span class="hint" title="Each one also happens on its own in its season">Seasonal moments · preview</span>
     <button type="button" data-fx="storm">Summer storm</button>
     <button type="button" data-fx="fireflies">Night fireflies</button>
@@ -164,7 +168,16 @@ const smooth=t=>t*t*(3-2*t);
 const FOLIAGE=[['#b9d86e',.3],[null,0],['#c98a32',.6],['#a39a8c',.72]];
 // multiply tint over the whole scene through the day: [hour, colour, strength]
 const TINT=[[0,'#34467a',.5],[4.5,'#3a4a78',.48],[5.5,'#8a6e8e',.4],[6.3,'#f2a27a',.3],[7.5,'#f7d9b5',.12],[9.5,'#ffffff',0],[16,'#fff1dc',.05],[17.6,'#f5a070',.26],[18.6,'#b0708a',.38],[19.8,'#4a5584',.46],[21,'#34467a',.5],[24,'#34467a',.5]];
-let hour=q.has('hour')?+q.get('hour'):9,season=q.has('season')?+q.get('season'):1.2;
+// served by the garden's own server the page is live; opened as a file it is the offline sketch it began as
+const LIVE=location.protocol.startsWith('http');
+if(q.has('debug')||!LIVE)root.classList.add('debug');
+// one clock for everyone, taken from real time: a garden day is a real minute and a season two, so a year passes in eight
+const DAY_MS=60000,SEASON_MS=120000,YEAR_MS=4*SEASON_MS;
+let skew=0;
+const gardenNow=()=>Date.now()+skew;
+const clockHour=t=>(t%DAY_MS)/DAY_MS*24;
+const clockSeason=t=>(t%YEAR_MS)/SEASON_MS;
+let hour=q.has('hour')?+q.get('hour'):clockHour(Date.now()),season=q.has('season')?+q.get('season'):clockSeason(Date.now());
 let auto=!FREEZE&&!q.has('hour')&&!q.has('season'),night=0;
 const lerp=(a,b,t)=>a+(b-a)*t;
 // seasons hold steady for most of their span and blend into the next over the last quarter
@@ -881,12 +894,12 @@ function driftSpecies(x,row){
   return spById(d.sp);
 }
 // best of a few candidates: keeps plants spaced out instead of piling heads on top of each other
-function wildSpot(wide){
+function wildSpot(wide,others=flowers){
   const row=Math.floor(rand()*ROWS.length),r=ROWS[row];
   let best=null,bestD=-1;
   for(let k=0;k<6;k++){
     const x=wide&&rand()<.25?-150+rand()*1500:200+rand()*800,y=r.y[0]+rand()*(r.y[1]-r.y[0]);
-    let d=1e9;for(const f of flowers)d=Math.min(d,Math.abs(f.x-x)+Math.abs(f.y-y)*2.5);
+    let d=1e9;for(const f of others)d=Math.min(d,Math.abs(f.x-x)+Math.abs(f.y-y)*2.5);
     if(d>bestD){bestD=d;best=[x,y]}
   }
   return[...best,driftSpecies(best[0],row)];
@@ -1033,9 +1046,58 @@ function addFlower(sp,x,y,p,mine,fresh){
   return f;
 }
 
-let people=Math.min(5,Math.max(1,parseInt(q.get('people'))||5));
+// live, the server says who is here (and who was here a moment ago); ?people= overrides it to look at the garden
+let people=Math.min(5,Math.max(1,parseInt(q.get('people'))||(LIVE?1:5)));
 let speed=q.get('speed')==='slow'?.1:1;
-let wilt=people===1?1:0,spawnAcc=0;
+let wilt=people===1?1:0,presenceInfo={here:people,echo:0};
+// time spent together, in person-seconds beyond the first person: the server keeps the total, the page follows it
+let warmth=0;
+const GROW_W=30,WILD={every:20};
+const wildPlan=[],wildOn=new Map(),byId=new Map();
+let localSown=0,lastWildN=-1;
+const wildCount=()=>Math.min(wildPlan.length,WILD_BASE+Math.floor(Math.max(0,warmth)/WILD.every));
+// a planted flower grows with the time people spend together after it went in; a wild one that came up with
+// the garden's warmth grows from the moment it did
+function grown(f){
+  if(f.sown)return Math.min(1,.12+.88*clamp01((warmth-f.warmthAt)/GROW_W));
+  if(presetG!=null)return presetG;
+  return f.unlock==null?f.p0:Math.min(f.p0,clamp01((warmth-f.unlock)/GROW_W));
+}
+function removeFlower(f){f.g.remove();flowers.splice(flowers.indexOf(f),1)}
+// which wild flowers are up follows from the garden's warmth and the planted flowers alone, so every visitor
+// sees the same ones: a planted flower clears the wild ones crowding it, and planted flowers always have room
+function syncWild(){
+  const sown=flowers.filter(f=>f.sown),room=MAX-sown.length,n=wildCount();
+  let shown=0;
+  wildPlan.forEach((w,i)=>{
+    const want=i<n&&shown<room&&!sown.some(s=>Math.abs(s.x-w.x)+Math.abs(s.y-w.y)*2.5<18);
+    if(want)shown++;
+    const f=wildOn.get(i);
+    if(want&&!f){
+      const unlock=i>=WILD_BASE?(i-WILD_BASE+1)*WILD.every:null;
+      rand=mulberry32(1000+i);
+      const nf=addFlower(w.sp,w.x,w.y,0,false,unlock!=null&&warmth-unlock<GROW_W);
+      Object.assign(nf,{p0:w.p,unlock});nf.p=grown(nf);wildOn.set(i,nf);drawFlower(nf);
+    }else if(!want&&f){removeFlower(f);wildOn.delete(i)}
+  });
+  lastWildN=n;
+}
+// a planted flower looks the same to everyone because its shape is drawn from its id
+function plant(F,fresh){
+  const sp=spById(F.species);
+  if(byId.has(F.id)||!sp)return null;
+  rand=mulberry32(Math.imul(F.id,2654435761)>>>0);
+  const f=addFlower(sp,F.x,F.y,0,F.mine,fresh);
+  Object.assign(f,{id:F.id,sown:true,warmthAt:F.warmthAt,plantedAt:F.plantedAt});
+  if(!fresh){
+    // coming back to a flower sown while its kind was dying back: it waits as a seed only until that kind next comes up
+    const[up,,fade,gone]=LIFE[sp.id],s0=(clockSeason(F.plantedAt)+f.jit+4)%4;
+    f.wait=s0>=fade&&s0<gone&&gardenNow()-F.plantedAt<((up-s0+4)%4)*SEASON_MS;
+    f.lastK=lifeOf(f).k;
+  }
+  f.p=grown(f);byId.set(F.id,f);
+  return f;
+}
 
 function setShown(e,shown){if(shown)e.removeAttribute('visibility');else e.setAttribute('visibility','hidden')}
 const wrapDeg=(a,b)=>{let d=b-a;while(d>180)d-=360;while(d<-180)d+=360;return d};
@@ -1102,28 +1164,56 @@ function applyColors(){
 
 function statusText(){
   const back=NAMES.filter(n=>people>=UNLOCK[n[1]]).map(n=>n[0]);
+  const here=LIVE&&!q.has('people')?presenceInfo.here:people;
+  const who=`${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`;
   const s=people===1?'just you, so the garden is waiting':(flowers.length>=MAX?'the garden is full':'the garden is growing');
-  return`${people} ${people===1?'person':'people'} here · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
+  return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
 }
 
 function svgPoint(e){const pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(fg.getScreenCTM().inverse());return[pt.x,pt.y]}
 function chosen(x,y){const v=document.querySelector('input[name=species]:checked').value;return v==='random'?driftSpecies(x,rowOf(y)):spById(v)}
 function say(text){const a=$('announce');a.textContent=text;a.classList.add('show');clearTimeout(say.t);say.t=setTimeout(()=>a.classList.remove('show'),2400)}
-// a visitor's sowing always wins: in a full garden it takes the place of the nearest wild flower
-function sow(x,y){
-  let replaced=false;
-  if(flowers.length>=MAX){
-    let nearest=null,bd=1e9;
-    for(const f of flowers)if(!f.mine){const d=Math.hypot(f.x-x,(f.y-y)*2.5);if(d<bd){bd=d;nearest=f}}
-    if(!nearest){say('Every spot holds a flower someone planted. There is no room left');return}
-    nearest.g.remove();flowers.splice(flowers.indexOf(nearest),1);replaced=true;
-  }
+const GROUND_X=[-200,1400];
+const SOW_REFUSED={409:'Every spot holds a flower someone planted. There is no room left',429:'That is a lot of sowing. Give these a moment to take root'};
+// a visitor's sowing always wins: it clears the wild flowers crowding it. Live, the server keeps it; offline, the page does
+async function sow(x,y){
+  x=Math.min(GROUND_X[1],Math.max(GROUND_X[0],x));
   rand=mulberry32(Math.random()*2**32>>>0);
-  const sp=chosen(x,y),f=addFlower(sp,x,y,.12,true,true);
-  drawFlower(f);
+  const sp=chosen(x,y);
   if(!STILL){const r=el('circle',{cx:f1(x),cy:f1(y),r:6,class:'ripple'},ripples);setTimeout(()=>r.remove(),1300)}
-  const seed=lifeOf(f).seed;
+  let F;
+  if(LIVE){
+    let res;
+    try{res=await fetch('/api/flowers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({species:sp.id,x:+x.toFixed(1),y:+y.toFixed(1)})})}
+    catch{say("Couldn't reach the garden. Try again in a moment");return}
+    if(!res.ok){say(SOW_REFUSED[res.status]||"The garden couldn't take that seed");return}
+    F=(await res.json()).flower;
+  }else F={id:-(++localSown),species:sp.id,x,y,plantedAt:gardenNow(),warmthAt:warmth,mine:true};
+  const before=wildOn.size,f=plant(F,true);
+  if(!f)return;
+  syncWild();drawFlower(f);
+  const seed=lifeOf(f).seed,replaced=wildOn.size<before;
   say(`You planted a ${sp.name.toLowerCase()}${seed?' seed':''}${replaced?' in place of a wildflower':''}${seed?`. It won't sprout until ${SEASONS[Math.floor(LIFE[sp.id][0])]}`:''}`);
+}
+
+// Until crit 9 brings a push channel, the page keeps in touch by asking: a heartbeat says this visitor is here,
+// and a refresh brings in what everyone else has planted
+function applyPresence(P){
+  presenceInfo=P;
+  if(q.has('people')||P.people===people)return;
+  people=P.people;$('people').value=people;$('peopleOut').textContent=people;applyColors();
+}
+async function heartbeat(){
+  try{const r=await fetch('/api/presence',{method:'POST'});if(r.ok)applyPresence(await r.json())}catch{}
+}
+async function refresh(){
+  try{
+    const r=await fetch('/api/garden');if(!r.ok)return;
+    const G=await r.json();
+    skew=G.now-Date.now();warmth=G.warmth;applyPresence(G);
+    for(const F of G.flowers)plant(F,false);
+    syncWild();
+  }catch{}
 }
 fg.addEventListener('click',e=>{let[x,y]=svgPoint(e);if(y<BAND[0]-10||y>BAND[1]+20)y=BAND[0]+Math.random()*(BAND[1]-BAND[0]);sow(x,Math.min(BAND[1],Math.max(BAND[0],y)))});
 $('sow').addEventListener('click',()=>{rand=Math.random;const[x,y]=wildSpot(false);sow(x,y)});
@@ -1163,15 +1253,12 @@ let last=performance.now(),lastDraw=0,lastUi=-1e9,lastStatus='',lastCounts='';
 function frame(now){
   const dt=Math.min(.1,(now-last)/1000);last=now;
   if(!FREEZE){
-    if(people>=2){
-      const rate=speed*(people-1)/25;
-      for(const f of flowers)if(f.p<1)f.p=Math.min(1,f.p+rate*f.rate*dt);
-      spawnAcc+=speed*(people-1)*.3*dt;
-      while(spawnAcc>=1){spawnAcc--;if(flowers.length<MAX){rand=Math.random;const[x,y,sp]=wildSpot(true);addFlower(sp,x,y,0,false,true)}}
-    }
+    // between the server's answers the page keeps time together the same way the server does
+    warmth+=dt*Math.max(0,people-1)*(LIVE?1:speed);
+    for(const f of flowers)f.p=grown(f);
+    if(wildCount()!==lastWildN)syncWild();
     wilt+=((people===1?1:0)-wilt)*Math.min(1,dt*.8);
-    // demo clock: a day per minute, a season every two minutes
-    if(auto){hour=(hour+dt*24/60)%24;season=(season+dt/120)%4}
+    if(auto){const t=gardenNow();hour=clockHour(t);season=clockSeason(t)}
   }
   updateSky();
   updateDay();
@@ -1189,7 +1276,7 @@ function frame(now){
     if(auto){$('hour').value=hour.toFixed(2);$('season').value=season.toFixed(2)}
     $('hourOut').textContent=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
     $('seasonOut').textContent=cap(sn);
-    $('clock').textContent=`${cap(sn)} · ${timeName(hour)} · visual prototype`;
+    $('clock').textContent=`${cap(sn)} · ${timeName(hour)}`;
   }
   const mt=STILL?8:now/1000;
   motes.forEach((m,i)=>{
@@ -1218,9 +1305,12 @@ buildFx();
 buildDrifts();
 rand=mulberry32(parseInt(q.get('seed'))||7);
 const only=spById(q.get('only'));
-const preset=q.has('n')?Math.min(MAX,+q.get('n')):95;
 const presetG=q.has('g')?clamp01(+q.get('g')):null;
-for(let i=0;i<preset;i++){const[x,y,sp]=wildSpot(true);addFlower(only||sp,x,y,presetG??.55+rand()*.45,false)}
+// the wild garden is planned once and is the same for everyone: a new garden shows the first WILD_BASE of it,
+// and time spent together brings the rest up one at a time
+const WILD_BASE=q.has('n')?Math.min(MAX,+q.get('n')):LIVE?45:95;
+{const pts=[];for(let i=0;i<Math.max(95,WILD_BASE);i++){const[x,y,sp]=wildSpot(true,pts);pts.push({x,y});wildPlan.push({x,y,sp:only||sp,p:.55+rand()*.45})}}
+syncWild();
 $('people').value=people;$('peopleOut').textContent=people;
 if(speed<1)$('speed').value='slow';
 $('people').addEventListener('input',e=>{people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
@@ -1247,6 +1337,7 @@ updateCorner();
 updateWeather(0,0);
 for(const f of flowers)drawFlower(f);
 requestAnimationFrame(()=>requestAnimationFrame(t=>{root.classList.add('ready');last=t;frame(t)}));
+if(LIVE){const tick=()=>heartbeat().then(refresh);tick();setInterval(tick,15000)}
 </script>
 </body>
 </html>
