@@ -136,6 +136,11 @@
       <input id="season" type="range" min="0" max="3.99" step="0.01" value="1.2">
       <output id="seasonOut" for="season">Summer</output>
     </div>
+    <div class="field">
+      <label for="care">Tended</label>
+      <input id="care" type="range" min="0" max="1" step="0.01" value="0.4">
+      <output id="careOut" for="care">0.40</output>
+    </div>
     <label class="field"><input id="auto" type="checkbox" checked>Run the clock</label>
   </div>
   <div class="row fx debug">
@@ -185,6 +190,8 @@ function seasonMix(){const i=Math.floor(season)%4,t=clamp01((season-Math.floor(s
 function seasonWeight(k){const[i,j,t]=seasonMix();return(i===k?1-t:0)+(j===k?t:0)}
 // where a plant is in its year; derived from the season alone so scrubbing the slider backwards replays it correctly
 function lifeOf(f){
+  // an untended garden's planted flowers sleep as seeds; they are still there, and wake when people come back
+  if(f.sown&&care<DORMANT)return{g:0,k:0,seed:true};
   const[up,open,fade,gone]=LIFE[f.sp.id],s=(season+f.jit+4)%4;
   // something planted while its kind is dying back waits as a seed until its next growing season comes round
   if(f.wait){if(s>=fade&&s<gone)return{g:0,k:0,seed:true};if(s>=up&&s<fade)f.wait=false}
@@ -1054,19 +1061,24 @@ let wilt=people===1?1:0,presenceInfo={here:people,echo:0,people:LIVE?1:people};
 let peopleOverride=q.has('people');
 // time spent together, in person-seconds beyond the first person: the server keeps the total, the page follows it
 let warmth=0;
-const GROW_W=30,WILD={every:20};
+// How tended the garden is, 0 to 1, and how many wild flowers are up this year and would come back next; the
+// server keeps them (server/garden.ts has the twins of these numbers). ?care= or the console previews another.
+const GROW_W=30,WILD={min:12,max:95},DORMANT=.12;
+const wildFor=c=>Math.round(WILD.min+(WILD.max-WILD.min)*c);
+let careOverride=q.has('care');
+let care=careOverride?clamp01(+q.get('care')):LIVE?.4:1,wildN=wildFor(care),wildNext=wildN,lastGarden=null;
 const wildPlan=[],wildOn=new Map(),byId=new Map();
-let localSown=0,lastWildN=-1;
-const wildCount=()=>Math.min(wildPlan.length,WILD_BASE+Math.floor(Math.max(0,warmth)/WILD.every));
-// a planted flower grows with the time people spend together after it went in; a wild one that came up with
-// the garden's warmth grows from the moment it did
+let localSown=0,lastWildN=-1,settled=false;
+const wildCount=()=>Math.min(wildPlan.length,q.has('n')?Math.min(MAX,+q.get('n')):wildN);
+// a planted flower grows with the time people spend together after it went in, and loses vigour in a garden
+// nobody tends; a wild one that comes up while you watch sprouts from nothing
 function grown(f){
-  if(f.sown)return Math.min(1,.12+.88*clamp01((warmth-f.warmthAt)/GROW_W));
+  if(f.sown)return Math.min(1,.12+.88*clamp01((warmth-f.warmthAt)/GROW_W))*(.4+.6*smooth(clamp01((care-DORMANT)/.28)));
   if(presetG!=null)return presetG;
-  return f.unlock==null?f.p0:Math.min(f.p0,clamp01((warmth-f.unlock)/GROW_W));
+  return f.born==null?f.p0:Math.min(f.p0,(performance.now()-f.born)/20000);
 }
 function removeFlower(f){f.g.remove();flowers.splice(flowers.indexOf(f),1)}
-// which wild flowers are up follows from the garden's warmth and the planted flowers alone, so every visitor
+// which wild flowers are up follows from the server's count and the planted flowers alone, so every visitor
 // sees the same ones: a planted flower clears the wild ones crowding it, and planted flowers always have room
 function syncWild(){
   const sown=flowers.filter(f=>f.sown),room=MAX-sown.length,n=wildCount();
@@ -1076,13 +1088,18 @@ function syncWild(){
     if(want)shown++;
     const f=wildOn.get(i);
     if(want&&!f){
-      const unlock=i>=WILD_BASE?(i-WILD_BASE+1)*WILD.every:null;
       rand=mulberry32(1000+i);
-      const nf=addFlower(w.sp,w.x,w.y,0,false,unlock!=null&&warmth-unlock<GROW_W);
-      Object.assign(nf,{p0:w.p,unlock});nf.p=grown(nf);wildOn.set(i,nf);drawFlower(nf);
+      const nf=addFlower(w.sp,w.x,w.y,0,false,settled);
+      Object.assign(nf,{p0:w.p,wi:i,born:settled?performance.now():null});nf.p=grown(nf);wildOn.set(i,nf);drawFlower(nf);
     }else if(!want&&f){removeFlower(f);wildOn.delete(i)}
   });
-  lastWildN=n;
+  lastWildN=n;settled=true;
+}
+// how the garden stands, from the server or from the console's preview
+function applyTending(G){
+  if(G)lastGarden=G;
+  if(!careOverride&&lastGarden){care=lastGarden.care;wildN=lastGarden.wild;wildNext=lastGarden.wildNext}
+  $('care').value=care;$('careOut').textContent=care.toFixed(2);
 }
 // a planted flower looks the same to everyone because its shape is drawn from its id
 function plant(F,fresh){
@@ -1106,12 +1123,14 @@ const wrapDeg=(a,b)=>{let d=b-a;while(d>180)d-=360;while(d<-180)d+=360;return d}
 // growth follows the season's timeline but never outruns the plant's vigour, which only company builds up
 function drawFlower(f){
   const L=lifeOf(f),p=Math.min(L.g,f.p),k=L.k,w=Math.round(wilt*50)/50;
-  const key=`${p.toFixed(3)}|${k.toFixed(3)}|${w}|${L.seed}|${people}|${seasonKey}`;
+  // a wild flower that won't come through the winter leaves no seed behind
+  const lost=f.wi!=null&&f.wi>=Math.min(wildNext,wildCount());
+  const key=`${p.toFixed(3)}|${k.toFixed(3)}|${w}|${L.seed}|${people}|${seasonKey}|${lost}`;
   if(key===f.key)return;
   f.key=key;
   const dk=k-f.lastK;f.lastK=k;
   const collapse=smooth(clamp01((k-.72)/.28));
-  setShown(f.seedEl,L.seed||collapse>.3);
+  setShown(f.seedEl,(L.seed||collapse>.3)&&!lost);
   setShown(f.body,!L.seed);
   if(L.seed)return;
   f.body.setAttribute('opacity',(1-collapse).toFixed(2));
@@ -1167,9 +1186,10 @@ function applyColors(){
 function statusText(){
   const back=NAMES.filter(n=>people>=UNLOCK[n[1]]).map(n=>n[0]);
   const here=LIVE&&!peopleOverride?presenceInfo.here:people;
-  const who=LIVE&&peopleOverride?`Preview: ${people} ${people===1?'person':'people'}`
+  const who=LIVE&&(peopleOverride||careOverride)?`Preview: ${people} ${people===1?'person':'people'}`
     :`${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`;
-  const s=people===1?'just you, so the garden is waiting':(flowers.length>=MAX?'the garden is full':'the garden is growing');
+  const s=people===1?(care<DORMANT?'just you, and the garden has gone wild':'just you, so the garden is waiting')
+    :flowers.length>=MAX?'the garden is full':care<.35?'the garden is waking up':'the garden is growing';
   return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
 }
 
@@ -1207,13 +1227,13 @@ function applyPresence(P){
   people=P.people;$('people').value=people;$('peopleOut').textContent=people;applyColors();
 }
 async function heartbeat(){
-  try{const r=await fetch('/api/presence',{method:'POST'});if(r.ok)applyPresence(await r.json())}catch{}
+  try{const r=await fetch('/api/presence',{method:'POST'});if(r.ok){const P=await r.json();applyPresence(P);applyTending(P)}}catch{}
 }
 async function refresh(){
   try{
     const r=await fetch('/api/garden');if(!r.ok)return;
     const G=await r.json();
-    skew=G.now-Date.now();warmth=G.warmth;applyPresence(G);
+    skew=G.now-Date.now();warmth=G.warmth;applyPresence(G);applyTending(G);
     for(const F of G.flowers)plant(F,false);
     syncWild();
   }catch{}
@@ -1260,7 +1280,7 @@ function frame(now){
     // a preview of more people changes only the colours on this screen, never how fast anything grows
     warmth+=dt*Math.max(0,(LIVE?presenceInfo.people:people)-1)*(LIVE?1:speed);
     for(const f of flowers)f.p=grown(f);
-    if(wildCount()!==lastWildN)syncWild();
+    if((settled||!LIVE)&&wildCount()!==lastWildN)syncWild();
     wilt+=((people===1?1:0)-wilt)*Math.min(1,dt*.8);
     if(auto){const t=gardenNow();hour=clockHour(t);season=clockSeason(t)}
   }
@@ -1310,16 +1330,17 @@ buildDrifts();
 rand=mulberry32(parseInt(q.get('seed'))||7);
 const only=spById(q.get('only'));
 const presetG=q.has('g')?clamp01(+q.get('g')):null;
-// the wild garden is planned once and is the same for everyone: a new garden shows the first WILD_BASE of it,
-// and time spent together brings the rest up one at a time
-const WILD_BASE=q.has('n')?Math.min(MAX,+q.get('n')):LIVE?45:95;
-{const pts=[];for(let i=0;i<Math.max(95,WILD_BASE);i++){const[x,y,sp]=wildSpot(true,pts);pts.push({x,y});wildPlan.push({x,y,sp:only||sp,p:.55+rand()*.45})}}
-syncWild();
+// the wild garden is planned once and is the same for everyone; how much of it is up is the garden's care.
+// Live, nothing is drawn until the server says how tended it is, so a neglected garden doesn't flash full first
+{const pts=[];for(let i=0;i<Math.max(WILD.max,q.has('n')?Math.min(MAX,+q.get('n')):0);i++){const[x,y,sp]=wildSpot(true,pts);pts.push({x,y});wildPlan.push({x,y,sp:only||sp,p:.55+rand()*.45})}}
+applyTending(null);
+if(!LIVE)syncWild();else setTimeout(()=>{if(!settled)syncWild()},2500);
 $('people').value=people;$('peopleOut').textContent=people;
 if(speed<1)$('speed').value='slow';
 // pace only drives the offline sketch; live, growth follows the server's time together
 if(LIVE)$('speed').parentElement.style.display='none';
 $('people').addEventListener('input',e=>{peopleOverride=true;people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
+$('care').addEventListener('input',e=>{careOverride=true;care=+e.target.value;wildN=wildNext=wildFor(care);$('careOut').textContent=care.toFixed(2);syncWild()});
 $('speed').addEventListener('change',e=>{speed=e.target.value==='slow'?.1:1});
 const stopAuto=()=>{auto=false;$('auto').checked=false};
 $('hour').addEventListener('input',e=>{stopAuto();hour=+e.target.value;lastUi=-1e9});
@@ -1341,6 +1362,7 @@ addEventListener('keydown',e=>{
   if(e.code!=='Backquote'||e.ctrlKey||e.metaKey||e.altKey||e.repeat)return;
   if(root.classList.toggle('debug'))return fitView();
   if(!q.has('people')&&peopleOverride){peopleOverride=false;people=presenceInfo.people;$('people').value=people;$('peopleOut').textContent=people;applyColors()}
+  if(!q.has('care')&&careOverride){careOverride=false;applyTending(null);syncWild()}
   if(!q.has('hour')&&!q.has('season')&&!FREEZE){auto=true;$('auto').checked=true}
   fitView();
 });
