@@ -120,6 +120,13 @@ export function openStore(dir: string) {
       return { now, ...p, ...t, flowers };
     },
 
+    // who is here and how the garden stands, as everyone listening is told it; looking isn't being seen
+    state(now: number): Presence & Tending & { now: number } {
+      const p = presenceAt(now);
+      const { year: _year, ...t } = tendingAt(now, p.people);
+      return { now, ...p, ...t };
+    },
+
     heartbeat(visitor: string, now: number): Presence & Tending & { now: number } {
       q.forget.run(now - ECHO_WINDOW_MS);
       return { now, ...see(visitor, now) };

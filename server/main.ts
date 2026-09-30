@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie } from "hono/cookie";
+import { streamSSE } from "hono/streaming";
 import { marked } from "marked";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -42,8 +43,49 @@ app.get("/", (c) => c.html(page));
 app.get("/readme", (c) => c.redirect("/readme/", 301));
 app.get("/readme/", (c) => c.html(readme));
 
+// Everyone with the page open listens here and hears what changes as it happens: a flower sown, someone
+// arriving, the garden's tending moving on. A listener hears a flower as `mine` only if they planted it,
+// and nobody hears who planted the rest.
+type Listener = { visitor: string; send: (event: string, data: unknown) => void };
+const listeners = new Set<Listener>();
+const tell = (event: string, data: (l: Listener) => unknown): void => {
+  for (const l of listeners) l.send(event, data(l));
+};
+const tellPresence = (): void => {
+  const state = store.state(Date.now());
+  tell("presence", () => state);
+};
+// company fades on its own as people leave, so the listeners hear how things stand now and then as well
+setInterval(() => listeners.size && tellPresence(), 10_000).unref();
+// a comment every so often keeps quiet connections from being dropped along the way
+const PING_MS = 20_000;
+
 app.get("/api/garden", (c) => c.json(store.garden(c.get("visitor"), Date.now())));
-app.post("/api/presence", (c) => c.json(store.heartbeat(c.get("visitor"), Date.now())));
+app.post("/api/presence", (c) => {
+  const state = store.heartbeat(c.get("visitor"), Date.now());
+  tellPresence();
+  return c.json(state);
+});
+
+app.get("/api/events", (c) => {
+  const visitor = c.get("visitor");
+  return streamSSE(c, async (stream) => {
+    const me: Listener = {
+      visitor,
+      send: (event, data) => void stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => {}),
+    };
+    const gone = new Promise<void>((resolve) => stream.onAbort(resolve));
+    listeners.add(me);
+    // opening the page is arriving: everyone hears it, the newcomer included
+    store.heartbeat(visitor, Date.now());
+    tellPresence();
+    while (!stream.aborted) {
+      await Promise.race([stream.sleep(PING_MS), gone]);
+      if (!stream.aborted) await stream.write(": ping\n\n");
+    }
+    listeners.delete(me);
+  });
+});
 
 app.post("/api/flowers", bodyLimit({ maxSize: 1024 }), async (c) => {
   const sowing = validSowing(await c.req.json().catch(() => null));
@@ -54,7 +96,10 @@ app.post("/api/flowers", bodyLimit({ maxSize: 1024 }), async (c) => {
     return c.json({ error: "give these a moment to take root" }, 429);
   }
   if (store.sownCount() >= MAX_SOWN) return c.json({ error: "every spot holds a planted flower" }, 409);
-  return c.json({ flower: store.sow(visitor, sowing, now) }, 201);
+  const flower = store.sow(visitor, sowing, now);
+  tell("sown", (l) => ({ flower: { ...flower, mine: l.visitor === visitor } }));
+  tellPresence();
+  return c.json({ flower }, 201);
 });
 
 const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (info) => {
