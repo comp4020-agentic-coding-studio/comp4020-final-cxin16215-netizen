@@ -1,18 +1,21 @@
 # syntax = docker/dockerfile:1
 
-# A placeholder, and yours to replace: it serves one page, plus README.md
-# verbatim at /readme/, which is enough to prove the deploy path end to end.
-# Whatever your app is built with, the image that replaces this one must serve
-# HTTP on 0.0.0.0:$PORT (fly.toml sets PORT) and publish README.md at /readme/
-# (spec/README.md says what's checked).
+# The garden: one Node process that serves the page, renders README.md at
+# /readme/, and keeps its SQLite file on the /data volume. Node runs the
+# TypeScript as it is, so there is no build stage, only an install.
+# It serves HTTP on 0.0.0.0:$PORT, which fly.toml sets.
 
-FROM docker.io/library/busybox:1.38.0
-COPY placeholder/ /src/
-COPY README.md /src/
-# README.md goes into the page as-is, HTML-escaped, in place of @README@;
-# rendering it properly is your app's job
-RUN mkdir -p /site/readme \
-    && cp /src/index.html /site/ \
-    && sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' /src/README.md > /src/body \
-    && sed -e '/@README@/{r /src/body' -e 'd}' /src/readme.html > /site/readme/index.html
-CMD ["sh", "-c", "exec httpd -f -p 0.0.0.0:${PORT:-8080} -h /site"]
+FROM docker.io/library/node:24.21.0-alpine AS deps
+WORKDIR /app
+RUN npm install -g pnpm@11.9.0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
+FROM docker.io/library/node:24.21.0-alpine
+WORKDIR /app
+ENV NODE_ENV=production DATA_DIR=/data
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json README.md ./
+COPY server ./server
+COPY public ./public
+CMD ["node", "server/main.ts"]
