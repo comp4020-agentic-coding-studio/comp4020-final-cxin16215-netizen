@@ -695,7 +695,7 @@ function updateStorm(dt){
   if(stormAmt>.01){
     rainG.setAttribute('opacity',(stormAmt*.75).toFixed(2));
     for(const R of rainDrops){
-      if(!STILL){R.y+=R.v*dt*1.6;if(R.y>1){R.y-=1;R.x=Math.random()}}
+      if(!STILL){R.y+=R.v*dt*1.6;if(R.y>1){rainLand(R.x);R.y-=1;R.x=Math.random()}}
       const x=VX-100+R.x*(VW+200),y=VY+R.y*(790-VY);
       R.e.setAttribute('x1',f1(x));R.e.setAttribute('y1',f1(y));R.e.setAttribute('x2',f1(x-R.len*.28));R.e.setAttribute('y2',f1(y+R.len));
     }
@@ -1276,108 +1276,152 @@ function fitView(){
 
 // The garden's music. Nothing is recorded: every sound is made here from what the garden is doing. Each kind of
 // flower has its register (sunflowers low, forget-me-nots high) and sings from the harmony of the moment, which
-// follows the shared clock, so people in the garden together hear it in the same key. Alone there is one low
-// voice; each person more adds a voice to the chord and lets more of the flowers sing. It stays off until asked.
+// follows the shared clock, so people in the garden together hear it in the same key. It is kept soft on
+// purpose: pure tones in the middle of the range, slow swells, and echoes rather than anything sustained low
+// enough to hum. Alone there is one quiet voice and a note now and then; each person more adds a voice to the
+// chord and lets more of the flowers sing. It stays off until asked.
 const REG={sunflower:0,marigold:1,cosmos:1,poppy:2,tulip:2,bell:3,lavender:3,lily:4,forget:4};
 const CHORDS={
-  // by day, open major ninths around D; by night, the minor side of the same key, lower and slower
-  day:[[50,57,61,64,66],[43,50,54,57,61],[47,54,57,62,64],[45,52,57,59,64]],
-  night:[[40,47,50,54,55],[36,43,47,52,54],[33,40,48,52,55],[35,42,45,50,52]],
+  // all in D major, voiced from about A3 up: by day Dmaj9, Bm9, Gmaj9, A6/9; by night lower and on the minor side
+  day:[[57,62,66,73,76],[59,62,66,69,73],[55,59,62,66,69],[57,61,64,66,71]],
+  night:[[54,59,62,64,69],[50,55,59,62,66],[52,55,59,62,66],[54,57,61,64,69]],
 };
+// one person hears the middle of the chord, and each person more adds the next voice outward from it
+const VOICE_ORDER=[2,4,0,3,1];
 const CHORD_MS=7500;
 const hz=m=>440*Math.pow(2,(m-69)/12);
 const music={on:false,M:null};
 function musicGraph(ctx){
   const M={ctx,chord:-1,cur:CHORDS.day[0],nextBeat:0,nextChirp:0};
   M.master=ctx.createGain();M.master.gain.value=0;
-  const comp=ctx.createDynamicsCompressor();comp.threshold.value=-18;comp.ratio.value=4;
+  const comp=ctx.createDynamicsCompressor();comp.threshold.value=-20;comp.ratio.value=3;
   M.master.connect(comp);comp.connect(ctx.destination);
   // the noise everything else is shaped from: rain, thunder and the room itself
   const n=ctx.sampleRate*2;M.noise=ctx.createBuffer(1,n,ctx.sampleRate);
   {const d=M.noise.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1}
-  const len=ctx.sampleRate*3,ir=ctx.createBuffer(2,len,ctx.sampleRate);
-  for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)}
-  const verb=ctx.createConvolver(),wet=ctx.createGain();verb.buffer=ir;wet.gain.value=.45;verb.connect(wet);wet.connect(M.master);
-  M.dry=ctx.createGain();M.dry.connect(M.master);M.dry.connect(verb);
-  M.padTone=ctx.createBiquadFilter();M.padTone.type='lowpass';M.padTone.frequency.value=1400;M.padTone.connect(M.dry);
+  // a long, dark room: five seconds of tail with the top taken off, so it blooms rather than hisses
+  const len=ctx.sampleRate*5,ir=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.5)}
+  const verb=ctx.createConvolver(),dark=ctx.createBiquadFilter(),wet=ctx.createGain();
+  verb.buffer=ir;dark.type='lowpass';dark.frequency.value=3000;wet.gain.value=.6;
+  verb.connect(dark);dark.connect(wet);wet.connect(M.master);
+  M.dry=ctx.createGain();M.dry.gain.value=.8;M.dry.connect(M.master);M.dry.connect(verb);
+  // the flowers' notes also go through a slow echo, each repeat a little softer and duller
+  M.notes=ctx.createGain();M.notes.connect(M.dry);
+  const echo=ctx.createDelay(2),fb=ctx.createGain(),dull=ctx.createBiquadFilter(),echoOut=ctx.createGain();
+  echo.delayTime.value=.55;fb.gain.value=.38;dull.type='lowpass';dull.frequency.value=2200;echoOut.gain.value=.35;
+  M.notes.connect(echo);echo.connect(dull);dull.connect(fb);fb.connect(echo);dull.connect(echoOut);echoOut.connect(M.dry);
+  // the chord is sung through the shape of a soft "oh-ah", and heard mostly through the room, far off
+  M.choir=ctx.createGain();
+  const vowel=ctx.createGain(),soft=ctx.createBiquadFilter(),near=ctx.createGain();
+  for(const[f,q,a]of[[600,5,1],[1000,6,.55],[2500,8,.15]]){
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=q;
+    const g=ctx.createGain();g.gain.value=a;M.choir.connect(bp);bp.connect(g);g.connect(vowel);
+  }
+  soft.type='lowpass';soft.frequency.value=2200;near.gain.value=.25;
+  vowel.connect(soft);soft.connect(verb);soft.connect(near);near.connect(M.master);
+  // under the drops (see rainLand) there is only a faint, dark wash of water, never a hiss
   const rain=ctx.createBufferSource(),hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter();
-  rain.buffer=M.noise;rain.loop=true;hp.type='highpass';hp.frequency.value=900;lp.type='lowpass';lp.frequency.value=5000;
+  rain.buffer=M.noise;rain.loop=true;hp.type='highpass';hp.frequency.value=200;lp.type='lowpass';lp.frequency.value=800;
   M.rain=ctx.createGain();M.rain.gain.value=0;
   rain.connect(hp);hp.connect(lp);lp.connect(M.rain);M.rain.connect(M.dry);rain.start();
   return M;
 }
-// a soft bell: the fundamental and two quieter, quicker partials
-function note(M,t,freq,{gain=.08,decay=2.5,pan=0,bright=1}={}){
+// one raindrop: a tiny rising "plip", the sound of a drop meeting water
+function drop(M,t,pan){
+  const {ctx}=M,o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner(),f=600+Math.random()*1000;
+  o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*1.5,t+.03);
+  p.pan.value=Math.max(-1,Math.min(1,pan));
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.003+Math.random()*.006,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.05);
+  o.connect(g);g.connect(p);p.connect(M.dry);o.start(t);o.stop(t+.06);
+}
+// the rain you hear is the rain you see: a few of the drawn drops sound where they land, so the sound
+// starts, swells, moves and stops with the storm on the screen
+function rainLand(x){
+  const M=music.M;if(!music.on||!M||Math.random()>.05*stormAmt)return;
+  drop(M,M.ctx.currentTime+.01,(x-.5)*1.8);
+}
+// a soft, round note, like a felted music box: a pure tone with a faint octave, eased in rather than struck
+function note(M,t,freq,{gain=.05,decay=3.5,pan=0}={}){
   const {ctx}=M,g=ctx.createGain(),p=ctx.createStereoPanner();
   p.pan.value=Math.max(-1,Math.min(1,pan));
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(gain,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+decay);
-  g.connect(p);p.connect(M.dry);
-  for(const[r,a,d]of[[1,1,1],[2.76,.22*bright,.35],[5.4,.06*bright,.15]]){
-    const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=freq*r;
-    og.gain.setValueAtTime(a,t);og.gain.exponentialRampToValueAtTime(.0001,t+decay*d);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(gain,t+.05);g.gain.exponentialRampToValueAtTime(.0001,t+decay);
+  g.connect(p);p.connect(M.notes);
+  for(const[r,a]of[[1,1],[2,.12]]){
+    const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=freq*r;og.gain.value=a;
     o.connect(og);og.connect(g);o.start(t);o.stop(t+decay+.05);
   }
 }
 // where a flower sits decides which note of the chord it sings, so the same flower always sings the same way
 function flowerNote(f,chord,low){
-  const pcs=chord.map(m=>m%12),base=55+REG[f.sp.id]*6-(low?12:0),opts=[];
+  const pcs=chord.map(m=>m%12),base=(low?50:57)+REG[f.sp.id]*5,opts=[];
   for(let m=base;m<base+12;m++)if(pcs.includes(m%12))opts.push(m);
   return opts[Math.abs(Math.round(f.x*7+f.y*13))%opts.length];
 }
+// the chord underneath is a distant choir that breathes: each voice swells in, eases back while it holds, and
+// fades under the next. A voice is three singers slightly apart in pitch, with a vibrato that arrives late
 function pad(M,t,chord,voices,dur){
-  chord.slice(0,voices).forEach((m,i)=>{
-    const g=M.ctx.createGain(),a=i?.03:.045;
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+2.5);g.gain.setValueAtTime(a,t+dur);g.gain.linearRampToValueAtTime(0,t+dur+3);
-    g.connect(M.padTone);
-    for(const cents of[-4,4]){const o=M.ctx.createOscillator();o.type='triangle';o.frequency.value=hz(m);o.detune.value=cents;o.connect(g);o.start(t);o.stop(t+dur+3.1)}
+  const {ctx}=M,end=t+dur+4;
+  VOICE_ORDER.slice(0,voices).forEach((vi,i)=>{
+    const g=ctx.createGain(),a=i?.05:.065,vib=ctx.createOscillator(),depth=ctx.createGain();
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+3.5);g.gain.linearRampToValueAtTime(a*.6,t+Math.max(3.6,dur));g.gain.linearRampToValueAtTime(0,end);
+    vib.frequency.value=4.4+Math.random()*.9;depth.gain.setValueAtTime(0,t);depth.gain.linearRampToValueAtTime(6,t+3);vib.connect(depth);
+    for(let k=0;k<3;k++){
+      const o=ctx.createOscillator();o.type='sawtooth';o.frequency.value=hz(chord[vi]);o.detune.value=(k-1)*7+(Math.random()-.5)*4;
+      depth.connect(o.detune);o.connect(g);o.start(t);o.stop(end+.1);
+    }
+    vib.start(t);vib.stop(end+.1);g.connect(M.choir);
   });
 }
 // thunder comes a moment after the flash, low and rolling rather than a crack
 function thunder(){
   const M=music.M;if(!music.on||!M)return;
-  const {ctx}=M,t=ctx.currentTime+.4+Math.random()*1.2,s=ctx.createBufferSource(),lp=ctx.createBiquadFilter(),g=ctx.createGain();
-  s.buffer=M.noise;s.loop=true;lp.type='lowpass';lp.frequency.setValueAtTime(260,t);lp.frequency.exponentialRampToValueAtTime(70,t+4);
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.45,t+.25);g.gain.exponentialRampToValueAtTime(.001,t+4.5);
-  s.connect(lp);lp.connect(g);g.connect(M.dry);s.start(t);s.stop(t+4.6);
+  const {ctx}=M,t=ctx.currentTime+.15+Math.random()*.45,s=ctx.createBufferSource(),lp=ctx.createBiquadFilter(),g=ctx.createGain();
+  s.buffer=M.noise;s.loop=true;lp.type='lowpass';lp.frequency.setValueAtTime(240,t);lp.frequency.exponentialRampToValueAtTime(60,t+4);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.22,t+.5);g.gain.exponentialRampToValueAtTime(.001,t+5);
+  s.connect(lp);lp.connect(g);g.connect(M.dry);s.start(t);s.stop(t+5.1);
 }
+// a cricket far off in the grass: a short, soft trill, not a whine
 function chirp(M,t,amt){
   const {ctx}=M,o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner();
-  o.frequency.value=4300+Math.random()*500;p.pan.value=Math.random()*1.6-.8;g.gain.value=0;
-  for(let i=0;i<3;i++){const s=t+i*.05;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.02*amt,s+.008);g.gain.linearRampToValueAtTime(0,s+.03)}
-  o.connect(g);g.connect(p);p.connect(M.master);o.start(t);o.stop(t+.2);
+  o.frequency.value=3600+Math.random()*400;p.pan.value=Math.random()*1.6-.8;g.gain.value=0;
+  for(let i=0;i<3;i++){const s=t+i*.07;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.006*amt,s+.015);g.gain.linearRampToValueAtTime(0,s+.045)}
+  o.connect(g);g.connect(p);p.connect(M.dry);o.start(t);o.stop(t+.3);
 }
 function plantSound(f){
   const M=music.M;if(!music.on||!M)return;
-  note(M,M.ctx.currentTime+.02,hz(flowerNote(f,M.cur,true)),{gain:.05,decay:1.2,bright:.3,pan:(f.x-600)/700});
+  note(M,M.ctx.currentTime+.02,hz(flowerNote(f,M.cur,true)),{gain:.035,decay:2,pan:(f.x-600)/700});
 }
 function tickMusic(){
   const M=music.M;if(!music.on||!M)return;
   const now=M.ctx.currentTime,low=night>.5,t0=gardenNow(),ci=Math.floor(t0/CHORD_MS);
   if(ci!==M.chord){
     M.chord=ci;M.cur=CHORDS[low?'night':'day'][ci%4];
-    M.padTone.frequency.setTargetAtTime(low?520:1400,now,2);
     pad(M,now+.05,M.cur,people,(CHORD_MS-t0%CHORD_MS)/1000);
   }
   const open=[];
   for(const f of flowers){
     const L=lifeOf(f),o=!L.seed&&Math.min(L.g,f.p)>.7&&L.k<.4;
     // a flower coming into bloom rings once
-    if(o&&f.sang===false)note(M,now+.02+Math.random()*.3,hz(flowerNote(f,M.cur,low)),{gain:.08,decay:low?4:3,pan:(f.x-600)/700});
+    if(o&&f.sang===false)note(M,now+.02+Math.random()*.4,hz(flowerNote(f,M.cur,low)),{gain:.05,decay:low?5:4,pan:(f.x-600)/700});
     f.sang=o;if(o)open.push(f);
   }
   if(now>=M.nextBeat-.1){
-    const beat=low?1.6:.8,t=Math.max(now,M.nextBeat);M.nextBeat=t+beat;
-    // the more in bloom and the more company, the more the garden sings; alone, it only hums
-    const chance=Math.min(1,open.length/25)*(people-1)/4*.8;
+    const beat=low?2.2:1.3,t=Math.max(now,M.nextBeat);M.nextBeat=t+beat;
+    // the more in bloom and the more company, the more the garden sings; alone, only now and then
+    const chance=Math.min(1,open.length/25)*(.12+.55*(people-1)/4);
     if(open.length&&Math.random()<chance){
       const f=open[Math.floor(Math.random()*open.length)];
-      note(M,t+Math.random()*.08,hz(flowerNote(f,M.cur,low)),{gain:.055,decay:low?3.5:2.2,pan:(f.x-600)/700,bright:low?.5:1});
+      note(M,t+Math.random()*.15,hz(flowerNote(f,M.cur,low)),{gain:.04,decay:low?5:3.5,pan:(f.x-600)/700});
     }
-    if(flyAmt>.3&&Math.random()<.25*flyAmt)note(M,t+beat/2,hz(84+M.cur[Math.floor(Math.random()*5)]%12),{gain:.02,decay:1.5,pan:Math.random()*1.6-.8});
+    if(flyAmt>.3&&Math.random()<.2*flyAmt)note(M,t+beat/2,hz(81+M.cur[Math.floor(Math.random()*5)]%12),{gain:.015,decay:2.5,pan:Math.random()*1.6-.8});
   }
-  M.rain.gain.setTargetAtTime(stormAmt*.16,now,.5);
-  const crickets=night*(season>.4&&season<2.6?1:0)*(1-stormAmt);
-  if(crickets>.2&&now>=M.nextChirp){chirp(M,now+.02,crickets);M.nextChirp=now+.35+Math.random()*1.1}
+  M.rain.gain.setTargetAtTime(stormAmt*.025,now,.3);
+  // with reduced motion the drawn rain stands still, so the drops keep time here instead
+  const dt=Math.min(.1,now-(M.last??now));M.last=now;
+  if(STILL&&stormAmt>.05){M.drops=(M.drops||0)+dt*16*stormAmt;while(M.drops>=1){M.drops--;drop(M,now+Math.random()*.06,Math.random()*1.8-.9)}}
+  const crickets=smooth(clamp01((night-.6)/.4))*(season>.4&&season<2.6?1:0)*(1-stormAmt);
+  if(crickets>.1&&now>=M.nextChirp){chirp(M,now+.02,crickets);M.nextChirp=now+1.2+Math.random()*2.5}
 }
 async function toggleMusic(){
   const AC=window.AudioContext||window.webkitAudioContext;
@@ -1390,7 +1434,7 @@ async function toggleMusic(){
   if(music.on){
     await M.ctx.resume();
     M.chord=-1;M.nextBeat=M.ctx.currentTime+.5;for(const f of flowers)delete f.sang;
-    M.master.gain.setTargetAtTime(.8,M.ctx.currentTime,.8);
+    M.master.gain.setTargetAtTime(2.2,M.ctx.currentTime,.8);
     say('The garden is playing');
   }else{M.master.gain.setTargetAtTime(0,now,.3);setTimeout(()=>{if(!music.on)M.ctx.suspend()},1500)}
 }
