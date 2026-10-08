@@ -12,8 +12,11 @@
   @property --leaf{syntax:'<color>';inherits:true;initial-value:#999}
   @property --near{syntax:'<color>';inherits:true;initial-value:#888}
   @property --near-st{syntax:'<color>';inherits:true;initial-value:#777}
-  :root{--paper:#f2ece1;--ink:#2f2a26;--ink-soft:#6e665e;--line:rgba(47,42,38,.14);--leaf:#a29d97;--near:#8f8a84;--near-st:#77726c}
-  :root.ready{transition:--leaf 2.4s ease,--near 2.4s ease,--near-st 2.4s ease}
+  :root{--paper:#f2ece1;--ink:#2f2a26;--ink-soft:#6e665e;--line:rgba(47,42,38,.14)}
+  /* the foliage colours sit on the few things painted with them, not on the root: a colour easing on the root
+     restyles every node in the page on every frame of the change */
+  #grass{--leaf:#a29d97}#near{--near:#8f8a84;--near-st:#77726c}
+  .ready #grass{transition:--leaf 2.4s ease}.ready #near{transition:--near 2.4s ease,--near-st 2.4s ease}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{background:var(--paper);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;overflow:hidden}
@@ -24,6 +27,7 @@
   #night{z-index:12;pointer-events:none;opacity:0}#bolt{z-index:13;pointer-events:none}
   #flash{position:fixed;inset:0;z-index:13;pointer-events:none;background:#f4f6ff;opacity:0}
   #motes{z-index:14;pointer-events:none}
+  #bloom{z-index:10;pointer-events:none;mix-blend-mode:multiply}
   #daySky,#dayLand{pointer-events:none}
   /* both painted styles follow the presence colours: charcoal until enough people bring their families back */
   #starry,#night,#daySky,#dayLand{filter:grayscale(1);transition:filter 2.4s ease}
@@ -84,7 +88,7 @@
   .ready stop{transition:stop-color 2.4s ease}
   .ripple{fill:none;stroke:var(--ink);stroke-width:1.2;transform-box:fill-box;transform-origin:center;animation:ripple 1.2s ease-out forwards}
   @keyframes ripple{from{transform:scale(.3);opacity:.8}to{transform:scale(4);opacity:0}}
-  @media (prefers-reduced-motion:reduce){.ready .wash,.ready .fl,.ready stop,:root.ready{transition-duration:.6s}.ripple{display:none}.chip.now::after{animation:none}}
+  @media (prefers-reduced-motion:reduce){.ready .wash,.ready .fl,.ready stop,.ready #grass,.ready #near{transition-duration:.6s}.ripple{display:none}.chip.now::after{animation:none}}
 </style>
 <style id="spcss"></style>
 <style id="seasoncss"></style>
@@ -112,6 +116,7 @@
 <svg id="night" class="layer" aria-hidden="true"></svg>
 <svg id="bolt" class="layer" aria-hidden="true"></svg>
 <div id="flash"></div>
+<svg id="bloom" class="layer" aria-hidden="true"><defs id="bloomDefs"></defs></svg>
 <svg id="motes" class="layer" aria-hidden="true">
   <defs>
     <radialGradient id="moteGrad"><stop offset="0" stop-color="#7a716a" stop-opacity=".9"/><stop offset="1" stop-color="#7a716a" stop-opacity="0"/></radialGradient>
@@ -174,6 +179,7 @@
 <script>
 const NS='http://www.w3.org/2000/svg';
 const $=id=>document.getElementById(id);
+const bloomSvg=$('bloom');
 const root=document.documentElement,bg=$('bg'),fg=$('fg'),defs=$('defs'),near=$('near'),motesSvg=$('motes');
 const daySky=$('daySky'),dayLand=$('dayLand'),celestial=$('celestial'),weather=$('weather'),nightSvg=$('night'),tintEl=$('tint'),skySvg=$('sky'),starry=$('starry'),cornerSvg=$('corner'),boltSvg=$('bolt'),flashEl=$('flash');
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -389,7 +395,7 @@ function buildBackground(){
   snowG=el('g',{fill:'#f8f7f2',opacity:0},bg);
   wash(snowG,{cx:600,cy:630,rx:1000,ry:16,layers:8,opacity:.12});
   wash(snowG,{cx:600,cy:750,rx:1050,ry:42,layers:12,opacity:.16});
-  const grass=el('g',{fill:'none','stroke-linecap':'round',style:'stroke:var(--leaf)',opacity:.5},bg);
+  const grass=el('g',{id:'grass',fill:'none','stroke-linecap':'round',style:'stroke:var(--leaf)',opacity:.5},bg);
   for(let i=0;i<200;i++){
     const x=-200+rand()*1600,y=BAND[0]+rand()*(BAND[1]-BAND[0]+15),t=clamp01((y-BAND[0])/(BAND[1]-BAND[0])),h=(6+rand()*10)*(.6+t*.6);
     let d='';for(let k=0;k<3;k++){const lean=(rand()-.5)*9;d+=`M${f1(x+(k-1)*3)} ${f1(y)}q${f1(lean*.3)} ${f1(-h*.6)} ${f1(lean)} ${f1(-h)}`}
@@ -1191,10 +1197,66 @@ function drawFlower(f){
   }
 }
 
+// Someone arriving. Their light drifts in from the side of the garden, a voice joins the chord, and any
+// colour they bring back spreads through the garden from where they came in, the way pigment runs into wet
+// paper: the nearest flowers take it first and the far side last. Nothing of this happens on first load,
+// only when company changes while the page is open, and none of it moves under reduced motion.
+let arrivals=false;
+const FAM_TINT={red:'#e8907c',green:'#a6cf8e',blue:'#9bb7e4',yellow:'#f0cf74'};
+const BLOOM_S=3.2,blooms=[];
+function setPeople(n){
+  const was=people;if(n===was)return;
+  people=n;$('people').value=n;$('peopleOut').textContent=n;
+  if(n>was&&arrivals)arrive(was,n);
+  applyColors();
+}
+const sideOf=i=>i%2?1:-1;
+function arrive(was,n){
+  const side=sideOf(n-1),ox=side<0?VX:VX+VW,oy=600;
+  joinChoir(was,n,side*.7);
+  const fams=Object.keys(UNLOCK).filter(k=>was<UNLOCK[k]&&n>=UNLOCK[k]);
+  if(!fams.length||STILL)return;
+  // the colour front crosses the view in BLOOM_S seconds, and each thing waits for it to arrive
+  const speed=VW*1.3/BLOOM_S,wait=x=>(Math.abs(x-ox)/speed).toFixed(2)+'s';
+  for(const f of flowers)f.g.style.transitionDelay=wait(f.x);
+  for(const e of document.querySelectorAll('.wash[data-c]')){
+    if(e._x==null){try{const b=e.getBBox();e._x=b.width?b.x+b.width/2:600}catch{e._x=600}}
+    e.style.transitionDelay=wait(e._x);
+  }
+  // the painted day layers are left out: a delay on their filter stops Chromium drawing them until it ends
+  for(const e of[starry,nightSvg,near,$('grass')])e.style.transitionDelay=(BLOOM_S*.4).toFixed(2)+'s';
+  clearTimeout(arrive.t);
+  arrive.t=setTimeout(()=>{for(const e of document.querySelectorAll('[style*="transition-delay"]'))e.style.transitionDelay=''},(BLOOM_S+3)*1000);
+  for(const k of fams)bloom(ox,oy,FAM_TINT[k]);
+}
+function bloom(x,y,col){
+  const id='bl'+(bloom.n=(bloom.n||0)+1),gr=el('radialGradient',{id},$('bloomDefs'));
+  for(const[o,a]of[[0,0],[.55,.04],[.84,.5],[1,0]])el('stop',{offset:o,'stop-color':col,'stop-opacity':a},gr);
+  blooms.push({e:el('circle',{cx:f1(x),cy:f1(y),r:1,fill:`url(#${id})`,opacity:0},bloomSvg),gr,t:0});
+}
+function updateBlooms(dt){
+  for(let i=blooms.length-1;i>=0;i--){
+    const B=blooms[i];B.t+=dt;const u=B.t/BLOOM_S;
+    B.e.setAttribute('r',f1(Math.max(1,u*VW*1.3)));
+    B.e.setAttribute('opacity',(Math.sin(Math.PI*Math.min(1,u))*.55).toFixed(3));
+    if(u>=1){B.e.remove();B.gr.remove();blooms.splice(i,1)}
+  }
+}
+// A light flies down to where its person sowed, and the ripple comes as it lands. Everyone is anonymous, so
+// for someone else's flower it is whichever other light is nearest; your own sowing is always your own light.
+function fly(m,x,y,then){
+  if(!m||STILL||!arrivals){then?.();return}
+  m.task={x,y,t:0,then};
+}
+function nearestMote(x,y){
+  let best=null,bd=1e9;
+  motes.forEach((m,i)=>{if(i>0&&m.in&&!m.task&&m.x!=null){const d=Math.hypot(m.x-x,m.y-y);if(d<bd){bd=d;best=m}}});
+  return best;
+}
 function applyColors(){
   for(const k in UNLOCK)root.classList.toggle(`u-${k}`,people>=UNLOCK[k]);
   const green=people>=UNLOCK.green;
-  for(const[v,c]of[['--leaf','#7fae84'],['--near','#44704a'],['--near-st','#355a3b']])root.style.setProperty(v,green?foliage(c):grey(c));
+  for(const[e,v,c]of[[$('grass'),'--leaf','#7fae84'],[near,'--near','#44704a'],[near,'--near-st','#355a3b']])e.style.setProperty(v,green?foliage(c):grey(c));
   for(const e of document.querySelectorAll('[data-c]')){const c=e.dataset.c;e.style.fill=people>=UNLOCK[e.dataset.fam]?c:grey(c)}
   // at night the presence motes turn into fireflies, whatever colours have come back
   const mc=people>=5?'#e6b43c':night>.4?'#f3e6b0':MOTE_GREY;
@@ -1224,7 +1286,7 @@ async function sow(x,y){
   x=Math.min(GROUND_X[1],Math.max(GROUND_X[0],x));
   rand=mulberry32(Math.random()*2**32>>>0);
   const sp=chosen(x,y);
-  ripple(x,y);
+  ripple(x,y);fly(motes[0],x,y-16);
   let F;
   if(LIVE){
     let res;
@@ -1246,7 +1308,7 @@ async function sow(x,y){
 function applyPresence(P){
   presenceInfo=P;
   if(peopleOverride||P.people===people)return;
-  people=P.people;$('people').value=people;$('peopleOut').textContent=people;applyColors();
+  setPeople(P.people);
 }
 async function heartbeat(){
   try{const r=await fetch('/api/presence',{method:'POST'});if(r.ok){const P=await r.json();applyPresence(P);applyTending(P)}}catch{}
@@ -1264,7 +1326,7 @@ function listen(){
     if(byId.has(F.id))return;
     const f=plant(F,true);if(!f)return;
     syncWild();drawFlower(f);
-    if(!F.mine){ripple(F.x,F.y);plantSound(f)}
+    if(!F.mine)fly(nearestMote(F.x,F.y),F.x,F.y-16,()=>{ripple(F.x,F.y);plantSound(f)});
   });
 }
 if(LIVE)document.addEventListener('visibilitychange',()=>{if(document.hidden){events?.close();events=null}else listen()});
@@ -1303,7 +1365,7 @@ function fitView(){
   const s=Math.min(w/ROI.w,Math.max(120,h-ch-top)/ROI.h);
   const vw=w/s,vh=h/s,vx=ROI.x+ROI.w/2-vw/2,vy=ROI.y+ROI.h-(h-ch)/s;
   const vb=`${f1(vx)} ${f1(vy)} ${f1(vw)} ${f1(vh)}`;
-  for(const e of[skySvg,daySky,celestial,starry,bg,dayLand,fg,near,cornerSvg,weather,nightSvg,motesSvg])e.setAttribute('viewBox',vb);
+  for(const e of[skySvg,daySky,celestial,starry,bg,dayLand,fg,near,cornerSvg,weather,nightSvg,motesSvg,bloomSvg])e.setAttribute('viewBox',vb);
   nearL.setAttribute('transform',`translate(${f1(vx)} 0)`);
   nearR.setAttribute('transform',`translate(${f1(vx+vw)} 0)`);
   cypressG.setAttribute('transform',`translate(${f1(vx)} 0)`);
@@ -1397,10 +1459,10 @@ function flowerNote(f,chord,low){
 }
 // the chord underneath is a distant choir that breathes: each voice swells in, eases back while it holds, and
 // fades under the next. A voice is three singers slightly apart in pitch, with a vibrato that arrives late
-function pad(M,t,chord,voices,dur){
+function pad(M,t,chord,voices,dur,from=0){
   const {ctx}=M,end=t+dur+4;
-  VOICE_ORDER.slice(0,voices).forEach((vi,i)=>{
-    const g=ctx.createGain(),a=i?.05:.065,vib=ctx.createOscillator(),depth=ctx.createGain();
+  VOICE_ORDER.slice(from,voices).forEach((vi,i)=>{
+    const g=ctx.createGain(),a=from+i?.05:.065,vib=ctx.createOscillator(),depth=ctx.createGain();
     g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+3.5);g.gain.linearRampToValueAtTime(a*.6,t+Math.max(3.6,dur));g.gain.linearRampToValueAtTime(0,end);
     vib.frequency.value=4.4+Math.random()*.9;depth.gain.setValueAtTime(0,t);depth.gain.linearRampToValueAtTime(6,t+3);vib.connect(depth);
     for(let k=0;k<3;k++){
@@ -1409,6 +1471,12 @@ function pad(M,t,chord,voices,dur){
     }
     vib.start(t);vib.stop(end+.1);g.connect(M.choir);
   });
+}
+function joinChoir(was,n,pan){
+  const M=music.M;if(!music.on||!M||M.chord<0)return;
+  const now=M.ctx.currentTime;
+  pad(M,now+.05,M.cur,n,(CHORD_MS-gardenNow()%CHORD_MS)/1000,was);
+  note(M,now+.4,hz(M.cur[4]+12),{gain:.03,decay:5,pan});
 }
 // thunder comes a moment after the flash, low and rolling rather than a crack
 function thunder(){
@@ -1513,12 +1581,29 @@ function frame(now){
   }
   const mt=STILL?8:now/1000;
   motes.forEach((m,i)=>{
-    const target=i<people?1:0;
-    m.o=STILL?target:m.o+(target-m.o)*Math.min(1,dt*1.5);
-    m.e.setAttribute('cx',f1(600+Math.sin(mt*.1*(i+1)+m.ph)*280));
-    m.e.setAttribute('cy',f1(470+Math.cos(mt*.09*(i+1)+m.ph*1.3)*140));
+    const want=i<people;
+    if(want!==m.in){m.in=want;if(!STILL&&arrivals){m.move=want?'in':'out';m.mv=0}else m.move=null}
+    m.o=STILL?+want:m.o+(+want-m.o)*Math.min(1,dt*(want?1.2:.6));
+    let x=600+Math.sin(mt*.1*(i+1)+m.ph)*280,y=470+Math.cos(mt*.09*(i+1)+m.ph*1.3)*140;
+    // an arrival drifts in from its side of the garden over four seconds; company that fades drifts off it
+    if(m.move){
+      m.mv=Math.min(1,m.mv+dt/(m.move==='in'?4:5));
+      const ex=sideOf(i)<0?VX-80:VX+VW+80,w=m.move==='in'?1-easeOut(m.mv):smooth(m.mv);
+      x=lerp(x,ex,w);y=lerp(y,y+50,w);
+      if(m.move==='in'&&m.mv>=1)m.move=null;
+    }
+    if(m.task){
+      const T=m.task;T.t+=dt;
+      const w=T.t<.9?smooth(T.t/.9):T.t<2.2?1:1-smooth(clamp01((T.t-2.2)/1.4));
+      if(!T.done&&T.t>=.9){T.done=true;T.then?.()}
+      x=lerp(x,T.x,w);y=lerp(y,T.y,w);
+      if(T.t>3.6)m.task=null;
+    }
+    m.x=x;m.y=y;
+    m.e.setAttribute('cx',f1(x));m.e.setAttribute('cy',f1(y));
     m.e.setAttribute('opacity',(m.o*.85).toFixed(3));
   });
+  updateBlooms(dt);
   const s=statusText();if(s!==lastStatus){lastStatus=s;$('status').textContent=s}
   const mine=flowers.filter(f=>f.mine).length,c=`${flowers.length} plants${mine?` · you planted ${mine}`:''}`;
   if(c!==lastCounts){lastCounts=c;$('counts').textContent=c}
@@ -1548,7 +1633,7 @@ $('people').value=people;$('peopleOut').textContent=people;
 if(speed<1)$('speed').value='slow';
 // pace only drives the offline sketch; live, growth follows the server's time together
 if(LIVE)$('speed').parentElement.style.display='none';
-$('people').addEventListener('input',e=>{peopleOverride=true;people=+e.target.value;$('peopleOut').textContent=people;applyColors()});
+$('people').addEventListener('input',e=>{peopleOverride=true;setPeople(+e.target.value)});
 $('care').addEventListener('input',e=>{careOverride=true;care=+e.target.value;wildN=wildNext=wildFor(care);$('careOut').textContent=care.toFixed(2);syncWild()});
 $('music').addEventListener('click',toggleMusic);
 $('speed').addEventListener('change',e=>{speed=e.target.value==='slow'?.1:1});
@@ -1571,7 +1656,7 @@ if(FX[q.get('fx')])setTimeout(FX[q.get('fx')],300);
 addEventListener('keydown',e=>{
   if(e.code!=='Backquote'||e.ctrlKey||e.metaKey||e.altKey||e.repeat)return;
   if(root.classList.toggle('debug'))return fitView();
-  if(!q.has('people')&&peopleOverride){peopleOverride=false;people=presenceInfo.people;$('people').value=people;$('peopleOut').textContent=people;applyColors()}
+  if(!q.has('people')&&peopleOverride){peopleOverride=false;setPeople(presenceInfo.people)}
   if(!q.has('care')&&careOverride){careOverride=false;applyTending(null);syncWild()}
   if(!q.has('hour')&&!q.has('season')&&!FREEZE){auto=true;$('auto').checked=true}
   fitView();
@@ -1585,6 +1670,7 @@ updateCorner();
 updateWeather(0,0);
 for(const f of flowers)drawFlower(f);
 requestAnimationFrame(()=>requestAnimationFrame(t=>{root.classList.add('ready');last=t;frame(t)}));
+setTimeout(()=>{arrivals=true},LIVE?4000:1500);
 if(LIVE){const tick=()=>heartbeat().then(()=>{if(events?.readyState!==1)refresh()});tick();setInterval(tick,15000);listen()}
 </script>
 </body>
