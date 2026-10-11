@@ -77,12 +77,81 @@ On the client, the Monet day uses about 25,000 brush dabs. The page paints
 them once to a canvas and shows the result as a few images instead of keeping
 25,000 SVG paths.
 
+## Crit 9: going live, and the presence decision
+
+Polling every fifteen seconds was the one thing crit 8 left for later. I had
+the agent write the promise as a test first — a flower one person sows
+reaches everyone else within about a second, with no reload — and watched it
+fail red against the polling server
+([`2df86c4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2df86c4)).
+It went green behind a server-sent-events stream that every open tab listens
+on, broadcasting a sown flower and each change in who's here
+([`a123dd4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/a123dd4)),
+and the page was switched from asking every 15 seconds to listening
+([`470fb47`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/470fb47)).
+Checked with two headless browsers standing in for two people: a flower one
+sowed reached the other's screen 9 ms later.
+
+Crit 9 also asks for one concurrency decision, argued and written down. I
+decided presence — what it means to see who else is here — was the one that
+actually mattered for this garden, and not conflict handling or reconnect
+behaviour, both of which the data model and ADR 1's persistence already
+settle without a choice to make. The reasoning, the options, and what the
+decision costs are in
+[ADR 2](docs/adr/0002-presence.md).
+
+Specifying "within a second" before building the push surfaced a bug I
+wasn't looking for: the page opens its heartbeat and its event stream at the
+same instant, and a first-time visitor with no cookie yet was handed two
+identities instead of one, so a lone visitor could count as company. Found by
+a headless screenshot that said "2 people here" for one page
+([`1d82725`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/1d82725)),
+fixed by having the page hand out its own identity instead of racing two
+endpoints for it
+([`2ef7b58`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2ef7b58)).
+A further spec compares the numbers the page and server each hold — species,
+the ground, presence, growth — against each other directly, so a change that
+updates one and forgets its twin goes red instead of waiting to be noticed
+([`c7a6eb3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/c7a6eb3)).
+
+The pod will see this live on their own devices at the crit, so the controls
+were also cut down for a 390-wide screen: one row of species you swipe along
+instead of four or five covering the view
+([`3176806`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/3176806)).
+
+A week after deploying, I opened the live garden and saw that almost nothing
+I or anyone else had sown had come up. I asked the agent why. It read the
+garden's state with a plain request that doesn't count as a visit, and found
+the neglect rule from crit 8 doing exactly what it said: care had decayed to
+almost zero, which put all 66 planted flowers to sleep as seeds and cut the
+wild garden to 12. Care only rises when two people overlap, and nearly every
+visitor had come alone, so the garden had been asleep for days. That broke
+the README's promise that a planted flower comes up every spring. I decided
+that neglect should leave a sparse garden, never a bare one. The agent
+specified the floor first
+([`7d6af36`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/7d6af36)),
+raised it to a third of the wild garden
+([`cbc3766`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/cbc3766)),
+and stopped neglect from putting planted flowers to sleep, so it now only
+weakens them a little
+([`70097d5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/70097d5)).
+Growth itself still comes only from time spent together. The seeds people
+had been staring at were identical brown beans, so I asked for each kind's
+real seed instead, and checked them on an enlarged specimen sheet before
+looking at them in the garden
+([`c43b0ec`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/c43b0ec)).
+The lesson matches crit 8's: a rule that reads well in the design can still
+leave the lone visitor with nothing, and the place to find that is the
+deployed app after real use, not the spec.
+
 ## Where it stands
 
 Someone can sow a flower, leave, and find it again when they come back. The
-garden counts who is here and who just left, and grows only with company. For
-now, other people's flowers appear through polling every fifteen seconds. I
-plan to replace that with a push in crit 9.
+garden counts who is here and who just left, and grows only with company.
+Other people's flowers and arrivals now reach every open tab within about a
+second, pushed rather than polled, and an arrival shows as its own light and
+colour spreading through the garden rather than a number
+([`41a823d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/41a823d)).
 
 ## What I read, and where I stand
 
