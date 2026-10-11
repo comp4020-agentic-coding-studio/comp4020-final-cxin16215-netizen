@@ -18,10 +18,12 @@ it("company tends the garden, and neglect lets it go", () => {
   expect(tend(1, 0, 60_000, 5), "care has a ceiling").toBeLessThanOrEqual(1);
 });
 
-it("keeps some wild garden however long it is left", () => {
+it("keeps a sparse garden however long it is left", () => {
   expect(wildFor(0)).toBe(WILD.min);
   expect(wildFor(1)).toBe(WILD.max);
-  expect(WILD.min).toBeGreaterThan(0);
+  expect(WILD.min, "neglect thins the wild garden to a third, never to a bare patch").toBeGreaterThanOrEqual(
+    Math.round(WILD.max / 3),
+  );
 });
 
 it("loses wild flowers only at the turn of the year, but gains them any time", () => {
