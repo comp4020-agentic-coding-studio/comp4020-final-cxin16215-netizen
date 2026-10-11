@@ -359,8 +359,73 @@ function buildSymbols(){
   const disc=el('g',{id:'disc',style:'--pd:#8a6a45;--pd2:#4d3a28'},defs);
   petalRing(disc,0,0,10,8.5,3.6,1.5,2,.5,'--pd',.6);wash(disc,small(0,0,7.5,7.5,3,.55,'--pd2'));
   for(let i=0;i<14;i++){const a=rand()*Math.PI*2,r=rand()*6;el('circle',{cx:f1(Math.cos(a)*r),cy:f1(Math.sin(a)*r),r:.7,fill:'#2e2218',opacity:.6},disc)}
-  const seed=el('g',{id:'seed'},defs);
-  el('ellipse',{rx:2.4,ry:1.5,fill:'#6b5238'},seed);el('ellipse',{cx:-.6,cy:-.5,rx:.9,ry:.5,fill:'#9a7d5c'},seed);
+  // each kind's real seed (a bulb for the tulip, a pip for the lily) lying in a little patch of turned earth
+  const SOIL='--soil:#6b5440;--soil2:#4a3929';
+  // a calmer wash than small(): more vertices and less spread, so a patch of earth never throws a spike
+  const earth=(cx,cy,rx,ry,layers,opacity,v)=>({cx,cy,rx,ry,n:12,baseDepth:1,layerDepth:2,spread:.14,layerSpread:.14,layers,opacity,style:`fill:var(${v})`});
+  const soil=(g,rx=4.4)=>{wash(g,earth(0,.5,rx,1.5,3,.26,'--soil'));wash(g,earth(.6,.3,rx*.55,.8,2,.28,'--soil2'))};
+  const lip=(g,rx)=>wash(g,earth(0,.6,rx,.9,2,.5,'--soil'));
+  const seedOf=id=>{const g=el('g',{id:`seed-${id}`,style:SOIL},defs);soil(g);return g};
+  const scatter=(g,count,rx,ry,draw)=>{for(let i=0;i<count;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand());draw(f1(Math.cos(a)*r*rx),f1(-.2+Math.sin(a)*r*ry),Math.round(rand()*180),i)}};
+  {
+    const g=seedOf('sunflower');
+    const kernel=(t)=>{const k=el('g',{transform:t},g);
+      el('path',{d:'M-3 -.3C-3 -1.6-1.1-2.1.7-1.9C2-1.75 2.9-1.25 3.4-.85C2.9-.45 2 .15.7.35C-1.1.6-3 1-3-.3Z',fill:'#2b2724'},k);
+      el('path',{d:'M-2.7-.9C-1-1.5 1.2-1.5 3-.95M-2.8-.1C-.8-.4 1.4-.6 3.2-.85M-2.6.5C-.8.3 1.2-.1 3-.75',fill:'none',stroke:'#e4ddcc','stroke-width':.32,'stroke-linecap':'round',opacity:.9},k);
+      el('path',{d:'M-2.4-1.2C-1.2-1.65.4-1.75 1.6-1.55',fill:'none',stroke:'#fff','stroke-width':.25,opacity:.35},k)};
+    kernel('translate(-2 .9) rotate(168) scale(.72)');kernel('translate(.6 -.4) rotate(-8)');
+  }
+  {
+    const g=seedOf('tulip'),b=el('g',{transform:'scale(.78)'},g);
+    el('path',{d:'M0 .8C1.9 .8 3.2-.4 3.05-2.3C2.9-4.4 1-5.7.25-7.3C-.1-5.8-2.8-4.6-3.05-2.3C-3.2-.4-1.9.8 0 .8Z',fill:'#88593a'},b);
+    el('path',{d:'M-.2 .7C-1.9.6-2.9-.6-2.8-2.3C-2.6-4.1-.9-5.4.1-6.9C-.5-5.2-1.6-3.8-1.6-2C-1.6-.7-1.1.2-.2.7Z',fill:'#b48d66',opacity:.8},b);
+    el('path',{d:'M-1.9.2C-2.3-2-1.2-4.4.15-6.8M.1.6C-.1-2.2.1-4.6.2-7M1.9.2C2.4-2 1.4-4.4.3-6.8',fill:'none',stroke:'#553624','stroke-width':.3,opacity:.6},b);
+    el('path',{d:'M.25-7.3C.5-8 1.1-8.3 1.5-8.1',fill:'none',stroke:'#634029','stroke-width':.45,'stroke-linecap':'round'},b);
+    el('path',{d:'M-1 .7L-1.6 1.9M-.2.8L-.3 2.1M.6.8L.9 2M1.3.6L2 1.6',fill:'none',stroke:'#cbb993','stroke-width':.34,'stroke-linecap':'round',opacity:.85},b);
+    lip(g,2.9);
+  }
+  {
+    const g=seedOf('lily');
+    el('path',{d:'M-3.8.4C-2 .1 0 .1 3.2-.1',fill:'none',stroke:'#87694b','stroke-width':1.1,'stroke-linecap':'round'},g);
+    el('path',{d:'M-3 .6L-3.6 1.8M-1.6.6L-1.3 1.9M.2.5L-.4 1.7M2 .3L2.6 1.5',fill:'none',stroke:'#c9b38e','stroke-width':.28,'stroke-linecap':'round'},g);
+    el('path',{d:'M.9-6.4C1.7-4.8 2-2.2 1.75-.1L-.05-.1C-.25-2.2.1-4.8.9-6.4Z',fill:'#ddd4b2'},g);
+    el('path',{d:'M.9-6.4C1.3-5.6 1.55-4.6 1.65-3.6C1.2-3.3.6-3.3.25-3.6C.35-4.6.55-5.6.9-6.4Z',fill:'#b7b27a',opacity:.8},g);
+    el('path',{d:'M.85-5.6C.7-3.8.75-1.8.9-.2',fill:'none',stroke:'#9a9668','stroke-width':.25,opacity:.7},g);
+  }
+  {
+    const g=seedOf('poppy');
+    scatter(g,15,2.6,.95,(x,y,r,i)=>el('ellipse',{cx:x,cy:y,rx:.46,ry:.34,transform:`rotate(${r} ${x} ${y})`,fill:i%3?'#4b5364':'#6f7789'},g));
+  }
+  {
+    // forget-me-not nutlets, small shiny black teardrops, lying loose
+    const g=seedOf('forget');
+    scatter(g,5,2.4,.8,(x,y,r)=>{const k=el('g',{transform:`translate(${x} ${y}) rotate(${r})`},g);
+      el('path',{d:'M0-.9C.48-.55.62.15.36.62C.18.85-.18.85-.36.62C-.62.15-.48-.55 0-.9Z',fill:'#1d1a19'},k);
+      el('ellipse',{cx:-.13,cy:-.2,rx:.14,ry:.26,fill:'#a9a5a0',opacity:.75},k)});
+  }
+  {
+    const g=seedOf('cosmos');
+    const needle=(x,y,r)=>{const k=el('g',{transform:`translate(${x} ${y}) rotate(${r})`},g);
+      el('path',{d:'M-3.2 0C-1.3-.3 1.1-.3 3-.1',fill:'none',stroke:'#3a3027','stroke-width':.5,'stroke-linecap':'round'},k);
+      el('path',{d:'M3-.1L3.9-.8M3-.1L4 .4M2.9-.1L3.7-.25',fill:'none',stroke:'#4a3e33','stroke-width':.2,'stroke-linecap':'round'},k)};
+    needle(-.5,-.4,-14);needle(.3,.2,6);needle(-.2,.7,172);
+  }
+  {
+    const g=seedOf('marigold');
+    const quill=(r)=>{const k=el('g',{transform:`translate(-2.6 .5) rotate(${r})`},g);
+      el('path',{d:'M0 0L4.2 0',fill:'none',stroke:'#24201d','stroke-width':.62,'stroke-linecap':'round'},k);
+      el('path',{d:'M4.2 0L6.2 0',fill:'none',stroke:'#e4d9bc','stroke-width':.55,'stroke-linecap':'round'},k);
+      el('path',{d:'M6.2 0L7 -.5M6.2 0L7.1.3',fill:'none',stroke:'#e4d9bc','stroke-width':.22,'stroke-linecap':'round'},k)};
+    quill(-24);quill(-10);quill(4);
+  }
+  {
+    const g=seedOf('lavender');
+    scatter(g,6,2.2,.8,(x,y,r)=>{el('ellipse',{cx:x,cy:y,rx:.72,ry:.48,transform:`rotate(${r} ${x} ${y})`,fill:'#3a2a20'},g);el('circle',{cx:f1(+x-.2),cy:f1(+y-.15),r:.16,fill:'#c8b4a2',opacity:.7},g)});
+  }
+  {
+    const g=seedOf('bell');
+    scatter(g,10,3,1.1,(x,y,r,i)=>el('ellipse',{cx:x,cy:y,rx:.62,ry:.36,transform:`rotate(${r} ${x} ${y})`,fill:i%2?'#a77b4c':'#7c5934'},g));
+  }
   let css='';
   for(const s of SPECIES)css+=`.sp-${s.id}{--c1:${grey(s.c1)};--c2:${grey(s.c2)};--st:${grey(s.st)};--lf:${grey(s.lf)}}.u-${s.fam} .sp-${s.id}{--c1:${s.c1};--c2:${s.c2}}`;
   $('spcss').textContent=css;
@@ -1063,7 +1128,8 @@ function addFlower(sp,x,y,p,mine,fresh){
   // even heights within a species give each drift a calm top edge; small lean keeps stems from criss-crossing
   const h=(sp.h[0]+sp.h[1])/2*(.9+rand()*.2)*sc,lean=(rand()*2-1)*sp.lean*sc*.45;
   const g=el('g',{class:`fl sp-${sp.id}`,opacity:(.72+t*.28).toFixed(2)});
-  const seedEl=el('use',{href:'#seed',transform:`translate(${f1(x)} ${f1(y+1)}) scale(${sc.toFixed(2)})`,visibility:'hidden'},g);
+  // mirrored with the plant's lean, so neighbouring seeds of one kind don't lie identically
+  const seedEl=el('use',{href:`#seed-${sp.id}`,transform:`translate(${f1(x)} ${f1(y+1)}) scale(${(lean<0?-sc:sc).toFixed(2)} ${sc.toFixed(2)})`,visibility:'hidden'},g);
   const body=el('g',{},g);
   const B=makeBuilder(body,sc,t<.3,SEEDHEAD[sp.id]);
   HABITS[sp.id](B,x,y,sc,h,lean,sc*sp.size*1.4);
