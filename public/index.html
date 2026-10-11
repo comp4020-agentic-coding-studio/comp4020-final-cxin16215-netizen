@@ -1089,7 +1089,7 @@ let peopleOverride=q.has('people');
 let warmth=0;
 // How tended the garden is, 0 to 1, and how many wild flowers are up this year and would come back next; the
 // server keeps them (server/garden.ts has the twins of these numbers). ?care= or the console previews another.
-const GROW_W=30,WILD={min:12,max:95},DORMANT=.12;
+const GROW_W=30,WILD={min:32,max:95},DORMANT=.12;
 const wildFor=c=>Math.round(WILD.min+(WILD.max-WILD.min)*c);
 let careOverride=q.has('care');
 let care=careOverride?clamp01(+q.get('care')):LIVE?.4:1,wildN=wildFor(care),wildNext=wildN,lastGarden=null;

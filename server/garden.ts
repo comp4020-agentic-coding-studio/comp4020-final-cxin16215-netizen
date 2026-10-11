@@ -76,9 +76,9 @@ export function tend(care: number, since: number, now: number, people: number): 
   return Math.min(1, c);
 }
 
-// How many of the planned wild flowers are up. There is always some wild
-// garden left, however long nobody comes.
-export const WILD = { min: 12, max: 95 } as const;
+// How many of the planned wild flowers are up. However long nobody comes, a
+// third of the wild garden is left: sparse, never bare.
+export const WILD = { min: 32, max: 95 } as const;
 export const wildFor = (care: number): number => Math.round(WILD.min + (WILD.max - WILD.min) * care);
 
 // The garden's year, on the same clock the page draws with: a garden day is a
