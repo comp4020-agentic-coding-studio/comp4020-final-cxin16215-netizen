@@ -363,7 +363,7 @@ function buildSymbols(){
   const SOIL='--soil:#6b5440;--soil2:#4a3929';
   // a calmer wash than small(): more vertices and less spread, so a patch of earth never throws a spike
   const earth=(cx,cy,rx,ry,layers,opacity,v)=>({cx,cy,rx,ry,n:12,baseDepth:1,layerDepth:2,spread:.14,layerSpread:.14,layers,opacity,style:`fill:var(${v})`});
-  const soil=(g,rx=4.4)=>{wash(g,earth(0,.5,rx,1.5,3,.26,'--soil'));wash(g,earth(.6,.3,rx*.55,.8,2,.28,'--soil2'))};
+  const soil=(g,rx=4.4)=>{wash(g,earth(0,.5,rx,1.5,3,.18,'--soil'));wash(g,earth(.6,.3,rx*.55,.8,2,.2,'--soil2'))};
   const lip=(g,rx)=>wash(g,earth(0,.6,rx,.9,2,.5,'--soil'));
   const seedOf=id=>{const g=el('g',{id:`seed-${id}`,style:SOIL},defs);soil(g);return g};
   const scatter=(g,count,rx,ry,draw)=>{for(let i=0;i<count;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand());draw(f1(Math.cos(a)*r*rx),f1(-.2+Math.sin(a)*r*ry),Math.round(rand()*180),i)}};
@@ -1129,7 +1129,7 @@ function addFlower(sp,x,y,p,mine,fresh){
   const h=(sp.h[0]+sp.h[1])/2*(.9+rand()*.2)*sc,lean=(rand()*2-1)*sp.lean*sc*.45;
   const g=el('g',{class:`fl sp-${sp.id}`,opacity:(.72+t*.28).toFixed(2)});
   // mirrored with the plant's lean, so neighbouring seeds of one kind don't lie identically
-  const seedEl=el('use',{href:`#seed-${sp.id}`,transform:`translate(${f1(x)} ${f1(y+1)}) scale(${(lean<0?-sc:sc).toFixed(2)} ${sc.toFixed(2)})`,visibility:'hidden'},g);
+  const ss=sc*.6,seedEl=el('use',{href:`#seed-${sp.id}`,transform:`translate(${f1(x)} ${f1(y+1)}) scale(${(lean<0?-ss:ss).toFixed(2)} ${ss.toFixed(2)})`,visibility:'hidden'},g);
   const body=el('g',{},g);
   const B=makeBuilder(body,sc,t<.3,SEEDHEAD[sp.id]);
   HABITS[sp.id](B,x,y,sc,h,lean,sc*sp.size*1.4);
