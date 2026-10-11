@@ -2,7 +2,8 @@ import { expect, inject, it } from "vitest";
 import { CARE_TAU_MS, WILD, YEAR_MS, tend, wildFor, wildNow } from "../server/garden.ts";
 
 // A garden nobody tends slowly goes back to the wild: fewer wild flowers come
-// through each winter, and planted flowers sleep as seeds until people return.
+// through each winter, down to a sparse third, and planted flowers grow a
+// little weaker, though they still come up and flower in their season.
 // The rules are pure functions of the garden's state and the clock, checked
 // here directly; the running app has to report them.
 const baseUrl = inject("baseUrl");

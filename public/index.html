@@ -215,8 +215,6 @@ function seasonMix(){const i=Math.floor(season)%4,t=clamp01((season-Math.floor(s
 function seasonWeight(k){const[i,j,t]=seasonMix();return(i===k?1-t:0)+(j===k?t:0)}
 // where a plant is in its year; derived from the season alone so scrubbing the slider backwards replays it correctly
 function lifeOf(f){
-  // an untended garden's planted flowers sleep as seeds; they are still there, and wake when people come back
-  if(f.sown&&care<DORMANT)return{g:0,k:0,seed:true};
   const[up,open,fade,gone]=LIFE[f.sp.id],s=(season+f.jit+4)%4;
   // something planted while its kind is dying back waits as a seed until its next growing season comes round
   if(f.wait){if(s>=fade&&s<gone)return{g:0,k:0,seed:true};if(s>=up&&s<fade)f.wait=false}
@@ -1096,10 +1094,10 @@ let care=careOverride?clamp01(+q.get('care')):LIVE?.4:1,wildN=wildFor(care),wild
 const wildPlan=[],wildOn=new Map(),byId=new Map();
 let localSown=0,lastWildN=-1,settled=false;
 const wildCount=()=>Math.min(wildPlan.length,q.has('n')?Math.min(MAX,+q.get('n')):wildN);
-// a planted flower grows with the time people spend together after it went in, and loses vigour in a garden
-// nobody tends; a wild one that comes up while you watch sprouts from nothing
+// a planted flower grows with the time people spend together after it went in, and loses a little vigour in a
+// garden nobody tends, never so much that it can't flower; a wild one that comes up while you watch sprouts from nothing
 function grown(f){
-  if(f.sown)return Math.min(1,.12+.88*clamp01((warmth-f.warmthAt)/GROW_W))*(.4+.6*smooth(clamp01((care-DORMANT)/.28)));
+  if(f.sown)return Math.min(1,.12+.88*clamp01((warmth-f.warmthAt)/GROW_W))*(.8+.2*smooth(clamp01((care-DORMANT)/.28)));
   if(presetG!=null)return presetG;
   return f.born==null?f.p0:Math.min(f.p0,(performance.now()-f.born)/20000);
 }
