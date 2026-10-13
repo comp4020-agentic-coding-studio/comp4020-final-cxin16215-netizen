@@ -21,6 +21,9 @@
   html,body{margin:0;height:100%}
   body{background:var(--paper);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;overflow:hidden}
   .layer{position:fixed;inset:0;width:100%;height:100%;display:block}
+  /* each layer on its own compositor layer, so a mote or a falling leaf doesn't repaint the thousands of still
+     paths under it; on a phone screen that many layers cost more to composite than they save, so only wide ones */
+  @media (min-width:700px){.layer,#tint{will-change:transform}}
   #paper{z-index:0}#sky{z-index:1}#daySky{z-index:2}#celestial{z-index:3}#bg{z-index:4}#dayLand{z-index:5}#starry{z-index:6;opacity:0}#fg{z-index:7;cursor:crosshair}
   #near{z-index:8;pointer-events:none}#corner{z-index:9;pointer-events:none}#weather{z-index:10;pointer-events:none}
   #tint{position:fixed;inset:0;z-index:11;pointer-events:none;mix-blend-mode:multiply;background:#fff}
@@ -94,12 +97,7 @@
 <style id="seasoncss"></style>
 </head>
 <body>
-<svg id="paper" class="layer" aria-hidden="true">
-  <filter id="mottle"><feTurbulence type="fractalNoise" baseFrequency=".0045" numOctaves="3" seed="11"/><feColorMatrix values="0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .30  .5 0 0 0 -.18"/></filter>
-  <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="7"/><feColorMatrix values="0 0 0 0 .32  0 0 0 0 .27  0 0 0 0 .22  .6 0 0 0 -.22"/></filter>
-  <rect width="100%" height="100%" filter="url(#mottle)" opacity=".6"/>
-  <rect width="100%" height="100%" filter="url(#grain)" opacity=".7"/>
-</svg>
+<div id="paper" class="layer" aria-hidden="true"></div>
 <svg id="sky" class="layer" aria-hidden="true"></svg>
 <svg id="daySky" class="layer" aria-hidden="true"></svg>
 <svg id="celestial" class="layer" aria-hidden="true"></svg>
@@ -1613,7 +1611,10 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 let last=performance.now(),lastDraw=0,lastUi=-1e9,lastStatus='',lastCounts='';
+// a watercolour garden drifting this slowly doesn't need 60 frames a second; drawing at about 30 halves the work
+const FRAME_MS=1000/30-2;
 function frame(now){
+  if(now-last<FRAME_MS){requestAnimationFrame(frame);return}
   const dt=Math.min(.1,(now-last)/1000);last=now;
   if(!FREEZE){
     // between the server's answers the page keeps time together the same way the server does
@@ -1674,6 +1675,23 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
+// The paper's mottle and grain are two full-screen noise filters, among the costliest things a browser draws, and
+// they were redrawn whenever anything above them moved. They are baked once into a tile that repeats seamlessly
+// (stitchTiles), large enough that the slow mottle doesn't visibly repeat, and the paper shows the tile instead.
+function bakePaper(){
+  const T=768,svg=`<svg xmlns="${NS}" width="${T}" height="${T}">
+<filter id="m" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".0045" numOctaves="3" seed="11" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .30  .5 0 0 0 -.18"/></filter>
+<filter id="g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .32  0 0 0 0 .27  0 0 0 0 .22  .6 0 0 0 -.22"/></filter>
+<rect width="100%" height="100%" filter="url(#m)" opacity=".6"/><rect width="100%" height="100%" filter="url(#g)" opacity=".7"/></svg>`;
+  const img=new Image(),paper=$('paper');
+  img.onload=()=>{
+    const cv=document.createElement('canvas');cv.width=cv.height=T;cv.getContext('2d').drawImage(img,0,0);
+    cv.toBlob(b=>{paper.style.backgroundImage=`url(${URL.createObjectURL(b)})`;paper.style.backgroundSize=`${T}px ${T}px`});
+  };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+
+bakePaper();
 buildPicker();
 buildSymbols();
 buildBackground();
