@@ -164,6 +164,7 @@
       <output id="careOut" for="care">0.40</output>
     </div>
     <label class="field"><input id="auto" type="checkbox" checked>Run the clock</label>
+    <label class="field" title="Days and seasons on this screen pass five times faster; nothing grows faster"><input id="fast" type="checkbox">5× time</label>
   </div>
   <div class="row fx debug">
     <span class="hint" title="Each one also happens on its own in its season">Seasonal moments · preview</span>
@@ -203,6 +204,24 @@ if(q.has('debug')||!LIVE)root.classList.add('debug');
 const DAY_MS=60000,SEASON_MS=120000,YEAR_MS=4*SEASON_MS;
 let skew=0;
 const gardenNow=()=>Date.now()+skew;
+// the time this screen shows. The console's 5× runs it faster from where it was, for showing a whole year in a
+// minute and a half; growth, the shared chord and everything the server keeps stay on the garden's own clock
+const SHOW_X=5;
+let fastFrom=null;
+const shownNow=()=>fastFrom?fastFrom.shown+(gardenNow()-fastFrom.real)*SHOW_X:gardenNow();
+// a moment on the garden's clock that shows this season, at this hour on the nearest day within it: a season is
+// only two days long, so the season is kept exactly and the hour as close as the calendar allows
+function momentShowing(s,h){
+  const now=gardenNow(),start=Math.floor(now/YEAR_MS)*YEAR_MS+s*SEASON_MS;
+  const day=Math.floor(start/DAY_MS)*DAY_MS+h/24*DAY_MS;
+  return[day,day+DAY_MS,day-DAY_MS].reduce((a,b)=>Math.abs(b-start)<Math.abs(a-start)?b:a);
+}
+// 5× runs on from what is on screen, so turning it on after scrubbing to winter carries on from winter
+function setFast(on){
+  fastFrom=on?{shown:auto?shownNow():momentShowing(season,hour),real:gardenNow()}:null;
+  $('fast').checked=on;
+  if(on&&!FREEZE){auto=true;$('auto').checked=true}
+}
 const clockHour=t=>(t%DAY_MS)/DAY_MS*24;
 const clockSeason=t=>(t%YEAR_MS)/SEASON_MS;
 let hour=q.has('hour')?+q.get('hour'):clockHour(Date.now()),season=q.has('season')?+q.get('season'):clockSeason(Date.now());
@@ -1330,8 +1349,9 @@ function applyColors(){
 function statusText(){
   const back=NAMES.filter(n=>people>=UNLOCK[n[1]]).map(n=>n[0]);
   const here=LIVE&&!peopleOverride?presenceInfo.here:people;
-  const who=LIVE&&(peopleOverride||careOverride)?`Preview: ${people} ${people===1?'person':'people'}`
-    :`${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`;
+  const who=(LIVE&&(peopleOverride||careOverride)?`Preview: ${people} ${people===1?'person':'people'}`
+    :`${fastFrom?'Preview: ':''}${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`)
+    +(fastFrom?` · ${SHOW_X}× time`:'');
   const s=people===1?(care<DORMANT?'just you, and the garden has gone wild':'just you, so the garden is waiting')
     :flowers.length>=MAX?'the garden is full':care<.35?'the garden is waking up':'the garden is growing';
   return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
@@ -1623,7 +1643,7 @@ function frame(now){
     for(const f of flowers)f.p=grown(f);
     if((settled||!LIVE)&&wildCount()!==lastWildN)syncWild();
     wilt+=((people===1?1:0)-wilt)*Math.min(1,dt*.8);
-    if(auto){const t=gardenNow();hour=clockHour(t);season=clockSeason(t)}
+    if(auto){const t=shownNow();hour=clockHour(t);season=clockSeason(t)}
   }
   updateSky();
   updateDay();
@@ -1719,10 +1739,11 @@ $('people').addEventListener('input',e=>{peopleOverride=true;setPeople(+e.target
 $('care').addEventListener('input',e=>{careOverride=true;care=+e.target.value;wildN=wildNext=wildFor(care);$('careOut').textContent=care.toFixed(2);syncWild()});
 $('music').addEventListener('click',toggleMusic);
 $('speed').addEventListener('change',e=>{speed=e.target.value==='slow'?.1:1});
-const stopAuto=()=>{auto=false;$('auto').checked=false};
+const stopAuto=()=>{auto=false;$('auto').checked=false;fastFrom=null;$('fast').checked=false};
 $('hour').addEventListener('input',e=>{stopAuto();hour=+e.target.value;lastUi=-1e9});
 $('season').addEventListener('input',e=>{stopAuto();season=+e.target.value;lastUi=-1e9});
-$('auto').addEventListener('change',e=>{auto=e.target.checked&&!FREEZE});
+$('auto').addEventListener('change',e=>{auto=e.target.checked&&!FREEZE;if(!auto)setFast(false)});
+$('fast').addEventListener('change',e=>setFast(e.target.checked));
 $('hour').value=hour;$('season').value=season;$('auto').checked=auto;
 const FX={
   storm(){startStorm();say('A summer storm is rolling in')},
@@ -1740,6 +1761,7 @@ addEventListener('keydown',e=>{
   if(root.classList.toggle('debug'))return fitView();
   if(!q.has('people')&&peopleOverride){peopleOverride=false;setPeople(presenceInfo.people)}
   if(!q.has('care')&&careOverride){careOverride=false;applyTending(null);syncWild()}
+  if(fastFrom)setFast(false);
   if(!q.has('hour')&&!q.has('season')&&!FREEZE){auto=true;$('auto').checked=true}
   fitView();
 });
