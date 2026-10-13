@@ -140,9 +140,39 @@ had been staring at were identical brown beans, so I asked for each kind's
 real seed instead, and checked them on an enlarged specimen sheet before
 looking at them in the garden
 ([`c43b0ec`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/c43b0ec)).
+Seen in the live garden, even the real seeds stood out more than the
+flowers, so they were drawn smaller and their earth fainter
+([`7be0441`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/7be0441)).
 The lesson matches crit 8's: a rule that reads well in the design can still
 leave the lone visitor with nothing, and the place to find that is the
 deployed app after real use, not the spec.
+
+The garden also felt sluggish. Rather than guess, I had the agent measure it
+in a headless browser first: script took about 0.2 s in 8, and almost all
+the rest went to rasterising, because every layer shared one surface and any
+moving mote repainted the thousands of still paths under it, along with two
+full-screen noise filters on the paper. It baked the paper into a tile, gave
+each layer its own compositor layer on wide screens, and capped the
+animation at about 30 frames a second
+([`32aa475`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/32aa475)).
+The measurements also showed where a plausible fix backfired: giving every
+layer its own surface on a phone made it slower, so phones don't get it.
+Before and after screenshots differ by under 1/255 on average.
+
+For showing the garden at the crit, a year of eight minutes is too long, so
+I asked for a 5x speed in the console. As `CLAUDE.md` requires of the
+console, it changes only what one browser shows and never how fast anything
+grows
+([`6b2e76c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/6b2e76c)).
+The first version sped up the whole clock, and I told the agent the seasons
+were still dragging. It measured the live site and found the clock really
+was five times faster, so instead of guessing at a fix it asked me what I
+was seeing. The answer was that at 5x a day lasted twelve seconds, so the sky
+flickered while each season still took twenty-four. Now only the seasons run
+faster and the days keep their pace
+([`81e895d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/81e895d)).
+What I asked for and what I meant were different, and only looking at it
+together showed that.
 
 ## Where it stands
 
@@ -152,6 +182,12 @@ Other people's flowers and arrivals now reach every open tab within about a
 second, pushed rather than polled, and an arrival shows as its own light and
 colour spreading through the garden rather than a number
 ([`41a823d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/41a823d)).
+A neglected garden thins to a sparse third instead of going bare, and its
+planted flowers still come up. What is still open is the lone visitor: of
+the 66 flowers in the live garden, 48 were sown by someone alone and have
+had no company since, so they stay as sprouts until two people visit at the
+same time. That follows the garden's first rule, and the crit, with the pod
+in the garden together, is the first real test of whether it is worth it.
 
 ## What I read, and where I stand
 

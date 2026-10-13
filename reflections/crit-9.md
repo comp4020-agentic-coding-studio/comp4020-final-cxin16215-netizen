@@ -2,26 +2,29 @@
 
 ## What was the breakthrough that moved the work forward?
 
-I expected the hard part to be the transport — it wasn't; server-sent events
-on top of the stack from ADR 1 were almost mechanical. The breakthrough was
-realising the actual decision crit 9 was asking for wasn't "how do changes
-reach everyone," it was "what does seeing each other even mean here," and
-that the garden had already answered it in `README.md`: a picture, not a
-dashboard. That ruled out a presence counter or a list of names before I'd
-written any server code, and pointed straight at light and colour arriving
-instead.
+Making the garden live turned out to be the easy part: server-sent events on
+the stack from ADR 1 were almost mechanical, and writing "a flower reaches
+everyone within a second" as a test first even caught a race where a lone
+visitor counted as two people.
 
-The second breakthrough was a bug I didn't expect: specifying "a flower
-reaches everyone within a second" as a test before writing the push code
-surfaced a second, unrelated race. The page opens its heartbeat and its event
-stream at the same instant, and without a cookie yet, each was handed its own
-identity — a lone visitor could count as two people. I only found it because
-a screenshot said "2 people here" for one headless page, which looked wrong
-enough to chase.
+The breakthrough came a week after deploying, when I opened the live garden
+and almost nothing anyone had sown had come up. Every test was green. The
+neglect rule I wrote in crit 8 was doing exactly what it said: nearly every
+visitor came alone, care never rose, and all 66 planted flowers had been
+asleep as seeds for days. Nothing was broken, but the garden was breaking its
+own promise that a stranger's flower comes up. I changed the rule so that
+neglect leaves a sparse garden, never a bare one.
 
 ## What did this work change about who I want to be as a software developer?
 
-Crit 8 taught me to check the case where ideal conditions are missing. This
-taught me to also check the case where two things I assumed were sequential
-are actually racing — the identity bug only existed because two requests
-left at once, which never happens if you test by hand, one click at a time.
+In crit 8 I said I wanted to check what someone sees when ideal conditions
+are missing. This week showed me that the spec can't tell me that. Only the
+deployed app, after real people have used it, can. I want to keep looking at
+what I've shipped, not only at whether it passes.
+
+It also changed how I ask for things. When the garden felt slow, I had the
+agent measure before changing anything, and the cause wasn't where I would
+have guessed. When I said the 5x seasons were still dragging, the agent found
+the clock was right and asked what I was seeing, and the real problem was
+something I hadn't put into words. I want to describe what I see, not the fix
+I imagine.
