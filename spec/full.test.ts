@@ -62,6 +62,21 @@ it(`lets the oldest of ${MAX_SOWN} wither to make room for a newcomer's flower`,
   expect(withered!.visitor, "the log names whose flower withered, as a hash").toMatch(/^[0-9a-f]{8}$/);
 });
 
+it(`withers nothing until the ${MAX_SOWN}th flower is planted, however old the rest are`, async () => {
+  const g = await scratch({ clock: true });
+  gardens.push(g);
+  const { ids } = await fill(g, MAX_SOWN - 1);
+  // every flower is old enough to give way, so only the count can be holding them
+  g.advance(YEAR_MS + 1000);
+  const { ids: last } = await fill(g, 1, MAX_SOWN - 1);
+
+  expect((await garden(g)).map((f) => f.id), "below the cap a sowing only adds").toEqual([...ids, ...last]);
+  expect(events(g).filter((e) => e.event === "wither")).toEqual([]);
+
+  await fill(g, 1, MAX_SOWN);
+  expect(events(g).filter((e) => e.event === "wither"), "the first past the cap is the first to wither one").toHaveLength(1);
+});
+
 it("withers the oldest first, one for each new flower", async () => {
   const g = await scratch({ clock: true });
   gardens.push(g);
