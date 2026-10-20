@@ -47,9 +47,10 @@ before changing anything.
 - Starts with a failing test when it adds a promise the server keeps. Commit
   the red test, then the change that turns it green.
 - Is looked at, not only tested, when it changes what the garden looks like:
-  screenshot the changed view at 1280×860 and at a real 390-wide viewport (an
-  iframe; headless windows can't go that narrow), by day and by night, and with
-  few people and many. Headless browsers give an animation only a few frames,
+  screenshot the changed view at the two viewports the marker uses, 1920×1080
+  and 390×844 (Chrome's device emulation, as DevTools' device toolbar does; a
+  headless window can't go that narrow, and a cross-site iframe drops the
+  cookie), by day and by night, and with few people and many. Headless browsers give an animation only a few frames,
   so step time-based effects by hand rather than trusting a screenshot of
   nothing. Most visual bugs so far (a new lily that looked withered, a storm
   that didn't show, a header lost against the clouds) were found by looking.
