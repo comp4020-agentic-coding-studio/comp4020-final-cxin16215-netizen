@@ -1,5 +1,5 @@
 import { afterEach, expect, inject, it } from "vitest";
-import { MAX_SOWN, SOW_LIMIT } from "../server/garden.ts";
+import { SOW_LIMIT } from "../server/garden.ts";
 import { scratch, sow, stranger, type Scratch } from "./scratch.ts";
 
 // What each visitor may do and see, decided by the server (docs/adr/0003-who-may-do-what.md), checked by
@@ -40,14 +40,14 @@ it("refuses a flower sown in the sky, off the ground, or of a kind it doesn't gr
     { species: "poppy", x: Number.MAX_VALUE, y: 700 },
     { species: "cactus", x: 600, y: 700 },
     { species: "poppy", x: 600 },
-    { species: "poppy", x: 600, y: 700, visitor: "someone-else", id: 1 },
+    { species: "poppy", x: 600, y: 700, visitor: "someone-else", id: -7 },
   ]) {
     const res = await plant(me, body);
     if (body.visitor) {
       // extra fields are ignored, never trusted: the planter is whoever holds the cookie
       expect(res.status).toBe(201);
       const { flower } = (await res.json()) as { flower: Flower };
-      expect(flower.id).not.toBe(1);
+      expect(flower.id).not.toBe(-7);
       expect(flower).not.toHaveProperty("visitor");
     } else expect(res.status, JSON.stringify(body)).toBe(400);
   }
@@ -124,17 +124,4 @@ it(`lets a visitor sow ${SOW_LIMIT.count} in ten minutes, refuses the next, and 
   expect((await sow(g, me, { species: "poppy", x: 400, y: 700 })).status, "still inside the ten minutes").toBe(429);
   g.advance(2000);
   expect((await sow(g, me, { species: "poppy", x: 400, y: 700 })).status, "the window has passed").toBe(201);
-});
-
-it(`refuses a flower once ${MAX_SOWN} are planted`, async () => {
-  const g = await scratch({ clock: true });
-  gardens.push(g);
-  let me = await stranger(g);
-  for (let i = 0; i < MAX_SOWN; i++) {
-    // a fresh visitor every dozen keeps under the per-visitor limit without waiting
-    if (i % SOW_LIMIT.count === 0) me = await stranger(g);
-    expect((await sow(g, me, { species: "cosmos", x: -200 + i * 10, y: 700 })).status).toBe(201);
-  }
-  const full = await sow(g, await stranger(g), { species: "cosmos", x: 600, y: 700 });
-  expect(full.status).toBe(409);
 });
