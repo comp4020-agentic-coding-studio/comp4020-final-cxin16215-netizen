@@ -60,13 +60,14 @@ export function openLog(dir: string, now: () => number) {
         .filter(([, value]) => value !== undefined && value !== null && value !== "")
         .map(([k, value]) => `${k}=${show(value)}`)
         .join(" ");
-      console.log(line);
+      // kept before it is printed, so whoever sees a line printed can read it back from the table
       try {
         keep.run(t, event, v, result, reason ?? null, line);
       } catch (e) {
         // a full or broken disk loses the kept copy, never the visitor's request; the printed line still stands
         console.error(`t=${t} event=log-failed result=refused reason=${show(String(e))}`);
       }
+      console.log(line);
     },
     close: (): void => db.close(),
   };
