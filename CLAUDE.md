@@ -10,7 +10,11 @@ before changing anything.
   shared or persistent comes from the server's state and the shared clock,
   never from `Math.random()`; a planted flower's shape is drawn from its id.
   Local randomness is only for things that don't last (rain, butterflies).
-- Let anyone remove or move a flower someone else planted.
+- Let anyone remove or move a flower someone else planted. The garden itself
+  retires flowers in exactly one way: once 140 are planted, the oldest that has
+  lived a whole garden year withers for each new one (ADR 4). Don't add another
+  (by species, by planter, by vote), and never delete the row: a withered
+  flower keeps its record with `gone_at`.
 - Tell anyone who planted a flower, except the planter (the API says `mine`,
   never whose).
 - Log, print or store a visitor's cookie (`gid`), or anything that holds it

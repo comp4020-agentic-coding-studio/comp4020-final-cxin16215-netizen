@@ -27,11 +27,11 @@ offers) are a courtesy; the rules hold for a request sent by hand.
 | Learn which flowers are theirs, and nothing about whose the rest are | `mine` is computed per request; no owner field is sent | Planting is a trace, not a signature |
 | Sow one of the nine species on the ground band | `validSowing` in `server/garden.ts`; refuses `sky`, `off-ground`, `not-a-species`, `not-a-place` | The garden only grows what it can draw where it can draw it |
 | Sow at most 12 in ten minutes | `SOW_LIMIT`, counted per cookie in SQLite; `429 too-many` | Keeps one person from filling the 140 spots alone |
-| Sow while fewer than 140 planted flowers stand | `MAX_SOWN`; `409 full` | The page holds 140 plants (README "Still open") |
+| Sow in a full garden, the oldest flower giving way | `store.sow`: the oldest planted flower that has lived a garden year withers; `409 full` only if all 140 are younger | A full garden still takes a newcomer (ADR 4) |
 
 | Nobody may | Checked by | Why |
 | --- | --- | --- |
-| Remove, move or replace a flower, their own included | No route does it; PUT, PATCH and DELETE on `/api/flowers` answer `405` and are logged as `edit refused no-edits` | "A stranger's trace lasts" |
+| Remove, move or replace a flower, their own included | No route does it; PUT, PATCH and DELETE on `/api/flowers` answer `405` and are logged as `edit refused no-edits` | "A stranger's trace lasts"; only the garden retires a flower, oldest first (ADR 4) |
 | Choose who a flower is planted by | The planter is the cookie; any other field sent with a sowing is ignored | The cookie is the only identity |
 | Learn another visitor's identity | No response carries anyone else's cookie or hash; a malformed or guessed cookie is handed a fresh one | Holding the cookie is being that person |
 | Read the log | No route serves it | See below |
@@ -53,7 +53,8 @@ t=2026-10-21T04:13:40.002Z event=leave visitor=c01d4e88 result=ok how=closed sta
 
 Events: `start` and `stop` (the machine), `new` (a cookie handed out),
 `arrive` and `leave` (the first page opened and the last one closed), `sow`,
-and `edit` (always refused). Lines are printed, so `flyctl logs` shows them as
+`wither` (a planted flower giving way: whose it was, as a hash, and which
+flower took its room), and `edit` (always refused). Lines are printed, so `flyctl logs` shows them as
 they happen, and kept in a `log` table in `$DATA_DIR/log.db` on the volume, so
 they survive a restart, a redeploy and Fly's own short log retention.
 
@@ -113,8 +114,11 @@ mise exec -- flyctl ssh console -a comp4020-final-cxin16215-netizen \
   flowers in ten minutes holds for a visitor who keeps their cookie; someone who
   clears it, opens a private window or scripts requests without one is a new
   visitor each time and can fill the remaining spots. The only backstop is the
-  140-flower cap, and the log shows it happening (many `new` visitors, each
-  sowing up to 12). Limiting by IP was rejected: a room full of people at the
+  140-flower cap, and since a full garden lets its oldest flowers wither
+  (ADR 4), enough fresh cookies could push out every flower older than a
+  garden year. The log shows it happening (many `new` visitors, each sowing up
+  to 12, and a run of `wither` lines), and the year-long floor means it can
+  never take a flower sown in the last eight minutes. Limiting by IP was rejected: a room full of people at the
   showcase shares one network, so it would stop the garden at its best.
 - **A hash of a hash-able cookie would be reversible.** The hash is only safe
   because the cookie is long and random. If the identity ever became

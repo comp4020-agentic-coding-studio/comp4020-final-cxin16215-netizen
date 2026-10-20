@@ -17,7 +17,11 @@ for a while, so a stranger who arrives just after them isn't alone.
 
 **A stranger's trace lasts.** Planting is the one thing you can do, so it has to
 be worth doing: your flower keeps its place and shape, comes up every spring,
-and for as long as the garden is open, nobody can remove it.
+and nobody can remove it. The ground holds 140 planted flowers; once they are
+all there, the oldest runs out of nourishment and withers to make room for each
+new one, but never before it has lived a whole garden year. A full garden still
+takes a newcomer's flower, and the garden, not a person, decides which gives
+way.
 
 **It is a picture, not a dashboard.** How many people are here, and how long
 they have stayed, shows first in the colour and the growth. One line of plain
@@ -69,6 +73,6 @@ anyone's flower. Scores or leaderboards. Watching without being counted.
 
 ## Still open
 
-Nothing yet decides what happens once 140 planted flowers fill the garden.
-Other people's changes arrive within fifteen seconds; crit 9 makes that
-immediate.
+Whether the oldest flowers going is the right price for a garden that never
+turns anyone away ([ADR 4](docs/adr/0004-a-full-garden.md)): the people who
+came first are the first to lose their flowers.
