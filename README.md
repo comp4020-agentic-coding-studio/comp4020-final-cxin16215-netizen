@@ -34,8 +34,12 @@ flowers, the same shape for the same flower on every screen.
 Checked by `spec/` on every change: a stranger can sow on their first visit and
 their flower is there when they come back, marked as theirs; everyone else sees
 it, not as theirs; the garden refuses species it doesn't grow and places that
-aren't ground; two people at once count as company. By hand on the deployed app:
-flowers survive a restart and a redeploy.
+aren't ground; two people at once count as company; nobody can remove or move a
+flower, and nobody learns anyone else's identity; the garden keeps a log of who
+did what that names each visitor only by a short hash and outlives a restart.
+By hand on the deployed app: flowers and the log survive a restart and a
+redeploy. Who may do what, and why, is in
+[ADR 3](docs/adr/0003-who-may-do-what.md).
 
 Judged, not tested: whether the painting holds together in every season and
 hour (I checked screenshots of each while building it), whether growth feels

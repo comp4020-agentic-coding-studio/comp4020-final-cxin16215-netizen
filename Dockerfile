@@ -12,6 +12,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 
 FROM docker.io/library/node:24.21.0-alpine
+# the sqlite3 shell, for reading the log over `flyctl ssh console` (ADR 3); the app itself uses node:sqlite
+RUN apk add --no-cache sqlite
 WORKDIR /app
 ENV NODE_ENV=production DATA_DIR=/data
 COPY --from=deps /app/node_modules ./node_modules

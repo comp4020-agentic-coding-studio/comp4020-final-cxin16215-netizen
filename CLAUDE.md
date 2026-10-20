@@ -13,6 +13,15 @@ before changing anything.
 - Let anyone remove or move a flower someone else planted.
 - Tell anyone who planted a flower, except the planter (the API says `mine`,
   never whose).
+- Log, print or store a visitor's cookie (`gid`), or anything that holds it
+  (a raw `Cookie` header, a request dump, an error with the request in it).
+  The cookie is the identity: whoever reads it can sow as that person. The log
+  names a visitor only as `who()` in `server/log.ts`, 8 hex characters of a
+  hash, and `spec/log.test.ts` fails if the cookie shows up anywhere in what
+  the server prints or keeps. Keep the cookie from `randomBytes`: a guessable
+  one would make the hash reversible.
+- Serve the log. There is no route to it, public or "admin": the history is
+  read with `flyctl ssh console` and sqlite3, by me (ADR 3).
 - Ask a visitor for anything before they can sow: no sign-up, no name.
 - Grow while one person is alone with no company lingering. Growth is time
   spent together; don't add a shortcut around it.
@@ -50,6 +59,13 @@ before changing anything.
   company for everyone is not.
 - Keeps the twin numbers in step: species, the ground, presence and growth are
   in both `server/garden.ts` and `public/index.html`.
+- Logs what a visitor does that changes anything, or is refused, through
+  `log.write` in `server/main.ts`: one key=value line with `t`, `event`,
+  `visitor`, `result`, and `reason` when refused. A new route that changes
+  state, or turns someone away, gets a line and a spec for it.
+- Checks two people with two separate browsers: two Chrome profiles, or Chrome
+  and another browser. Incognito windows of one Chrome share one cookie jar
+  with each other, so two of them are one visitor.
 - Says in its commit message what changed and why, in a commit of its own.
 
 ## Secrets and the repo
