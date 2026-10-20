@@ -43,7 +43,7 @@ flower, and nobody learns anyone else's identity; the garden keeps a log of who
 did what that names each visitor only by a short hash and outlives a restart.
 By hand on the deployed app: flowers and the log survive a restart and a
 redeploy. Who may do what, and why, is in
-[ADR 3](docs/adr/0003-who-may-do-what.md).
+[ADR 3](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/blob/main/docs/adr/0003-who-may-do-what.md).
 
 Judged, not tested: whether the painting holds together in every season and
 hour (I checked screenshots of each while building it), whether growth feels
@@ -74,5 +74,5 @@ anyone's flower. Scores or leaderboards. Watching without being counted.
 ## Still open
 
 Whether the oldest flowers going is the right price for a garden that never
-turns anyone away ([ADR 4](docs/adr/0004-a-full-garden.md)): the people who
+turns anyone away ([ADR 4](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/blob/main/docs/adr/0004-a-full-garden.md)): the people who
 came first are the first to lose their flowers.
