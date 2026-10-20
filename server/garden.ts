@@ -94,12 +94,19 @@ export function wildNow(wild: number, year: number, care: number, now: number): 
 }
 
 export type Sowing = { species: Species; x: number; y: number };
+// why a sowing is turned away, as the log says it
+export type Refusal = { refused: "not-a-sowing" | "not-a-species" | "not-a-place" | "sky" | "off-ground" };
 
-export function validSowing(body: unknown): Sowing | null {
-  if (typeof body !== "object" || body === null) return null;
+// Only the species and the place are read from what a visitor sends; anything else in it is ignored,
+// so the planter is always whoever holds the cookie.
+export function validSowing(body: unknown): Sowing | Refusal {
+  if (typeof body !== "object" || body === null) return { refused: "not-a-sowing" };
   const { species, x, y } = body as Record<string, unknown>;
-  if (!SPECIES.includes(species as Species)) return null;
-  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  if (x < GROUND.x[0] || x > GROUND.x[1] || y < GROUND.y[0] || y > GROUND.y[1]) return null;
+  if (!SPECIES.includes(species as Species)) return { refused: "not-a-species" };
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return { refused: "not-a-place" };
+  }
+  if (y < GROUND.y[0]) return { refused: "sky" };
+  if (x < GROUND.x[0] || x > GROUND.x[1] || y > GROUND.y[1]) return { refused: "off-ground" };
   return { species: species as Species, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
 }

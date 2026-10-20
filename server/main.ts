@@ -7,10 +7,17 @@ import { marked } from "marked";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { MAX_SOWN, SOW_LIMIT, validSowing } from "./garden.ts";
+import { openLog } from "./log.ts";
 import { openStore } from "./store.ts";
 
 const port = Number(process.env.PORT ?? 8080);
-const store = openStore(process.env.DATA_DIR ?? "data");
+const dataDir = process.env.DATA_DIR ?? "data";
+// A test can move the garden's clock on by writing how far into GARDEN_CLOCK_FILE (spec/scratch.ts).
+// Unset, as it is on Fly, the garden keeps real time.
+const clockFile = process.env.GARDEN_CLOCK_FILE;
+const clock = (): number => Date.now() + (clockFile ? Number(readFileSync(clockFile, "utf8")) || 0 : 0);
+const store = openStore(dataDir);
+const log = openLog(dataDir, clock);
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 const page = read("../public/index.html");
 const readme = readmePage(read("../README.md"));
@@ -26,7 +33,10 @@ const VISITOR = /^[A-Za-z0-9_-]{22}$/;
 const identify: MiddlewareHandler<Env> = async (c, next) => {
   let visitor = getCookie(c, "gid");
   if (!visitor || !VISITOR.test(visitor)) {
+    // 128 random bits from the OS's secure generator: the log names visitors by a short hash of this, and
+    // a guessable cookie would let anyone work back from the hash to the identity
     visitor = randomBytes(16).toString("base64url");
+    log.write({ event: "new", visitor, result: "ok", path: c.req.path });
     setCookie(c, "gid", visitor, {
       httpOnly: true,
       sameSite: "Lax",
@@ -55,17 +65,38 @@ const tell = (event: string, data: (l: Listener) => unknown): void => {
   for (const l of listeners) l.send(event, data(l));
 };
 const tellPresence = (): void => {
-  const state = store.state(Date.now());
+  const state = store.state(clock());
   tell("presence", () => state);
+};
+
+// For the log, someone arrives when their first page starts listening and leaves when their last one
+// stops: closing the tab, or hiding it, since a hidden page stops listening. A second tab is neither. This
+// is the plain fact of who has the garden open; the company the garden grows by fades more slowly
+// (ADR 2), so each line also says how many people the garden is counting.
+const open = new Map<string, { pages: number; since: number }>();
+const arrive = (visitor: string): void => {
+  const o = open.get(visitor);
+  if (o) return void o.pages++;
+  const now = clock();
+  open.set(visitor, { pages: 1, since: now });
+  log.write({ event: "arrive", visitor, result: "ok", open: open.size, people: store.state(now).people });
+};
+const leave = (visitor: string, how: "closed" | "shutdown"): void => {
+  const o = open.get(visitor);
+  if (!o || --o.pages > 0) return;
+  open.delete(visitor);
+  const now = clock();
+  const stayed = `${Math.round((now - o.since) / 1000)}s`;
+  log.write({ event: "leave", visitor, result: "ok", how, stayed, open: open.size, people: store.state(now).people });
 };
 // company fades on its own as people leave, so the listeners hear how things stand now and then as well
 setInterval(() => listeners.size && tellPresence(), 10_000).unref();
 // a comment every so often keeps quiet connections from being dropped along the way
 const PING_MS = 20_000;
 
-app.get("/api/garden", (c) => c.json(store.garden(c.get("visitor"), Date.now())));
+app.get("/api/garden", (c) => c.json(store.garden(c.get("visitor"), clock())));
 app.post("/api/presence", (c) => {
-  const state = store.heartbeat(c.get("visitor"), Date.now());
+  const state = store.heartbeat(c.get("visitor"), clock());
   tellPresence();
   return c.json(state);
 });
@@ -80,40 +111,88 @@ app.get("/api/events", (c) => {
     const gone = new Promise<void>((resolve) => stream.onAbort(resolve));
     listeners.add(me);
     // opening the page is arriving: everyone hears it, the newcomer included
-    store.heartbeat(visitor, Date.now());
+    store.heartbeat(visitor, clock());
+    arrive(visitor);
     tellPresence();
-    while (!stream.aborted) {
-      await Promise.race([stream.sleep(PING_MS), gone]);
-      if (!stream.aborted) await stream.write(": ping\n\n");
+    try {
+      while (!stream.aborted) {
+        await Promise.race([stream.sleep(PING_MS), gone]);
+        if (!stream.aborted) await stream.write(": ping\n\n");
+      }
+    } finally {
+      listeners.delete(me);
+      // a machine stopping has already said who was still here
+      if (!stopping) leave(visitor, "closed");
     }
-    listeners.delete(me);
   });
 });
 
-app.post("/api/flowers", bodyLimit({ maxSize: 1024 }), async (c) => {
-  const sowing = validSowing(await c.req.json().catch(() => null));
-  if (!sowing) return c.json({ error: "the garden can't grow that there" }, 400);
+const tooBig: MiddlewareHandler<Env> = bodyLimit({
+  maxSize: 1024,
+  onError: (c) => {
+    log.write({ event: "sow", visitor: c.get("visitor"), result: "refused", reason: "too-big" });
+    return c.json({ error: "the garden can't grow that there" }, 413);
+  },
+});
+app.post("/api/flowers", tooBig, async (c) => {
   const visitor = c.get("visitor");
-  const now = Date.now();
+  const refuse = (reason: string, status: 400 | 409 | 429, error: string) => {
+    log.write({ event: "sow", visitor, result: "refused", reason, sown: store.sownCount() });
+    return c.json({ error }, status);
+  };
+  const body: unknown = await c.req.json().catch(() => undefined);
+  if (body === undefined) return refuse("not-json", 400, "the garden can't grow that there");
+  const sowing = validSowing(body);
+  if ("refused" in sowing) return refuse(sowing.refused, 400, "the garden can't grow that there");
+  const now = clock();
   if (store.sownBy(visitor, now - SOW_LIMIT.windowMs) >= SOW_LIMIT.count) {
-    return c.json({ error: "give these a moment to take root" }, 429);
+    return refuse("too-many", 429, "give these a moment to take root");
   }
-  if (store.sownCount() >= MAX_SOWN) return c.json({ error: "every spot holds a planted flower" }, 409);
+  if (store.sownCount() >= MAX_SOWN) return refuse("full", 409, "every spot holds a planted flower");
   const flower = store.sow(visitor, sowing, now);
+  log.write({
+    event: "sow",
+    visitor,
+    result: "ok",
+    flower: flower.id,
+    species: flower.species,
+    x: flower.x,
+    y: flower.y,
+    sown: store.sownCount(),
+    people: store.state(now).people,
+  });
   tell("sown", (l) => ({ flower: { ...flower, mine: l.visitor === visitor } }));
   tellPresence();
   return c.json({ flower }, 201);
 });
 
-const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (info) => {
-  console.log(`garden listening on ${info.address}:${info.port}`);
+// Nobody can remove, move or replace a flower, its planter included: there is no route that would. A try
+// is logged, so an attempt to change someone's flower shows up as who tried it.
+app.on(["PUT", "PATCH", "DELETE"], ["/api/flowers", "/api/flowers/*"], (c) => {
+  log.write({ event: "edit", visitor: c.get("visitor"), result: "refused", reason: "no-edits", method: c.req.method });
+  return c.json({ error: "a flower stays where it was sown" }, 405, { allow: "GET, POST" });
 });
 
-// Fly stops an idle machine with SIGTERM (or SIGINT); close the database cleanly first
+const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (info) => {
+  log.write({ event: "start", result: "ok", port: info.port, flowers: store.sownCount(), machine: process.env.FLY_MACHINE_ID });
+});
+
+// Fly stops an idle machine with SIGINT (and a deploy or restart with SIGTERM). Whoever still has the
+// page open is logged as leaving because of it, then the stop itself, then the databases close cleanly.
+// A machine that dies without a signal leaves a start with no stop before it.
+let stopping = false;
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
+    if (stopping) return;
+    stopping = true;
+    for (const [visitor, o] of open) {
+      o.pages = 1;
+      leave(visitor, "shutdown");
+    }
+    log.write({ event: "stop", result: "ok", signal });
     server.close();
     store.close();
+    log.close();
     process.exit(0);
   });
 }
