@@ -547,7 +547,8 @@ function buildStarry(){
 // By day the backdrop is laid in the way Monet painted a meadow: short loaded dabs of unmixed colour side by side,
 // clouds in cream and lilac, distant poppies as single flecks, shadows violet rather than grey. Tens of thousands of
 // dabs would be tens of thousands of SVG paths, so each picture is painted once onto a canvas and shown as one image.
-const DAB_K=1.25,SKY_BOX={x:-400,y:-300,w:2000,h:940},LAND_BOX={x:-400,y:540,w:2000,h:400};
+// the day sky reaches as high as a phone's tall view looks (about y=-720 at 390×844), so no bare paper shows above it
+const DAB_K=1.25,SKY_BOX={x:-400,y:-760,w:2000,h:1400},LAND_BOX={x:-400,y:540,w:2000,h:400};
 const pick=a=>a[Math.floor(rand()*a.length)];
 const jit=(c,amt=1)=>{const r=rand();return r<.55?mix(c,'#ffffff',r*.3*amt):mix(c,'#3b3552',(r-.55)*.16*amt)};
 function dab(ctx,x,y,len,w,ang,col,a){
@@ -571,7 +572,7 @@ const cloudN=(x,y)=>.5+.5*Math.sin(x/190+1.6*Math.sin(y/120+x/700))*Math.sin(y/9
 const MONET_SKY={high:['#6f98d0','#7fa6d8','#8db2de','#a5c3e6','#9fb0dc'],mid:['#98bbe2','#aac7e8','#bcd3ec','#c8c9e6','#d9e3ee'],low:['#d9dfe9','#e8ddcf','#efd9c6','#d8d0e6','#f1e6c2','#c9d8e6'],cloud:['#f7f5ef','#eef0f1','#f6efe0','#fbf8f0'],shade:['#cfc6e0','#c2c3dc','#d8cfe3','#bfc8dc'],warm:['#f6ecd8','#f3dfd0','#ece2ea','#f7f1dc']};
 function paintSky(ctx){
   // broad strokes laid over one another: at this size a sky is a surface of paint, not a scatter of marks
-  for(let i=0;i<9000;i++){
+  for(let i=0;i<13400;i++){
     const x=SKY_BOX.x+rand()*SKY_BOX.w,y=SKY_BOX.y+rand()*SKY_BOX.h;
     if(y>hillTop(x)+8)continue;
     const n=cloudN(x,y),cl=.92*smooth(clamp01((n-.56)/.28))*(y<540?1:.6),hz=clamp01((y-430)/170);
@@ -924,7 +925,8 @@ function updateSky(){
   // a stormy night thins the painted swirls so the clouds beneath them show
   starry.style.opacity=(night*(1-stormAmt*.6)).toFixed(3);
   nightSvg.style.opacity=night.toFixed(3);
-  root.classList.toggle('dark',night>.5||stormAmt>.4);
+  // light lettering as soon as the sky turns dark at dusk and dawn, not only once night is deep
+  root.classList.toggle('dark',s>.3||stormAmt>.4);
   if(wasNight!==night>.4)applyColors();
 }
 
@@ -1467,7 +1469,10 @@ function fitView(){
   nearL.setAttribute('transform',`translate(${f1(vx)} 0)`);
   nearR.setAttribute('transform',`translate(${f1(vx+vw)} 0)`);
   cypressG.setAttribute('transform',`translate(${f1(vx)} 0)`);
-  cornerG.setAttribute('transform',`translate(${f1(vx+vw)} ${f1(vy)})`);
+  // the branch hangs from below the header, so it never lies across the status line or the clock: room for the
+  // tallest the header gets (on a phone the status wraps to two lines above the clock), fixed so it doesn't jump
+  const headH=w<=560?96:w<1100?80:56;
+  cornerG.setAttribute('transform',`translate(${f1(vx+vw)} ${f1(vy+headH/s)})`);
   VX=vx;VY=vy;VW=vw;VH=vh;
 }
 
