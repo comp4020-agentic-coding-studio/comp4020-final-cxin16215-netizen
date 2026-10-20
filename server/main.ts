@@ -6,7 +6,7 @@ import { streamSSE } from "hono/streaming";
 import { marked } from "marked";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { MAX_SOWN, SOW_LIMIT, validSowing } from "./garden.ts";
+import { SOW_LIMIT, validSowing } from "./garden.ts";
 import { openLog } from "./log.ts";
 import { openStore } from "./store.ts";
 
@@ -148,8 +148,20 @@ app.post("/api/flowers", tooBig, async (c) => {
   if (store.sownBy(visitor, now - SOW_LIMIT.windowMs) >= SOW_LIMIT.count) {
     return refuse("too-many", 429, "give these a moment to take root");
   }
-  if (store.sownCount() >= MAX_SOWN) return refuse("full", 409, "every spot holds a planted flower");
-  const flower = store.sow(visitor, sowing, now);
+  const sown = store.sow(visitor, sowing, now);
+  // only a garden whose planted flowers are all in their first year has no room
+  if (!sown) return refuse("full", 409, "every flower here is still in its first year");
+  const { flower, withered } = sown;
+  if (withered) {
+    log.write({
+      event: "wither",
+      visitor: withered.visitor,
+      result: "ok",
+      flower: withered.id,
+      for: flower.id,
+      age: `${Math.round((now - withered.plantedAt) / 3600_000)}h`,
+    });
+  }
   log.write({
     event: "sow",
     visitor,
@@ -161,6 +173,8 @@ app.post("/api/flowers", tooBig, async (c) => {
     sown: store.sownCount(),
     people: store.state(now).people,
   });
+  // the withered one goes first, so no page ever holds more than the garden does
+  if (withered) tell("withered", () => ({ id: withered.id }));
   tell("sown", (l) => ({ flower: { ...flower, mine: l.visitor === visitor } }));
   tellPresence();
   return c.json({ flower }, 201);

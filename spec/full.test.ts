@@ -12,7 +12,8 @@ type Flower = { id: number; species: string; x: number; y: number; mine: boolean
 
 const gardens: Scratch[] = [];
 afterEach(async () => {
-  for (const g of gardens.splice(0)) await g.dispose();
+  // newest first: a garden restarted on the same directory has to stop before that directory goes
+  for (const g of gardens.splice(0).reverse()) await g.dispose();
 });
 
 // sows `n` flowers left to right, a fresh visitor every dozen to stay under the per-visitor limit

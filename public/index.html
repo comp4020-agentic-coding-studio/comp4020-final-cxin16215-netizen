@@ -232,6 +232,8 @@ function seasonMix(){const i=Math.floor(season)%4,t=clamp01((season-Math.floor(s
 function seasonWeight(k){const[i,j,t]=seasonMix();return(i===k?1-t:0)+(j===k?t:0)}
 // where a plant is in its year; derived from the season alone so scrubbing the slider backwards replays it correctly
 function lifeOf(f){
+  // a planted flower giving way to a newcomer's runs out of strength: whatever the season, it withers through
+  if(f.dying!=null)return{g:1,k:Math.min(1,(performance.now()-f.dying)/DYING_MS),seed:false};
   const[up,open,fade,gone]=LIFE[f.sp.id],s=(season+f.jit+4)%4;
   // something planted while its kind is dying back waits as a seed until its next growing season comes round
   if(f.wait){if(s>=fade&&s<gone)return{g:0,k:0,seed:true};if(s>=up&&s<fade)f.wait=false}
@@ -1185,10 +1187,21 @@ function grown(f){
   return f.born==null?f.p0:Math.min(f.p0,(performance.now()-f.born)/20000);
 }
 function removeFlower(f){f.g.remove();flowers.splice(flowers.indexOf(f),1)}
+// The garden holds 140 planted flowers. Once it is full the oldest that has lived a whole garden year gives way
+// to each new one: it browns, droops and is gone in a few seconds, on every screen at once (the server says which)
+const DYING_MS=4000;
+function wither(id){
+  const f=byId.get(id);if(!f||f.dying!=null)return;
+  byId.delete(id);
+  // a seed still in the ground, or anyone who asked for less motion, sees it simply go
+  if(STILL||lifeOf(f).seed){removeFlower(f);syncWild();return}
+  f.dying=performance.now();f.key='';
+  setTimeout(()=>{removeFlower(f);syncWild()},DYING_MS+300);
+}
 // which wild flowers are up follows from the server's count and the planted flowers alone, so every visitor
 // sees the same ones: a planted flower clears the wild ones crowding it, and planted flowers always have room
 function syncWild(){
-  const sown=flowers.filter(f=>f.sown),room=MAX-sown.length,n=wildCount();
+  const sown=flowers.filter(f=>f.sown&&f.dying==null),room=MAX-sown.length,n=wildCount();
   let shown=0;
   wildPlan.forEach((w,i)=>{
     const want=i<n&&shown<room&&!sown.some(s=>Math.abs(s.x-w.x)+Math.abs(s.y-w.y)*2.5<18);
@@ -1353,7 +1366,7 @@ function statusText(){
     :`${fastFrom?'Preview: ':''}${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`)
     +(fastFrom?` · ${SHOW_X}× seasons`:'');
   const s=people===1?(care<DORMANT?'just you, and the garden has gone wild':'just you, so the garden is waiting')
-    :flowers.length>=MAX?'the garden is full':care<.35?'the garden is waking up':'the garden is growing';
+    :flowers.filter(f=>f.sown).length>=MAX?'full, so old flowers make way':care<.35?'the garden is waking up':'the garden is growing';
   return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
 }
 
@@ -1361,7 +1374,7 @@ function svgPoint(e){const pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(
 function chosen(x,y){const v=document.querySelector('input[name=species]:checked').value;return v==='random'?driftSpecies(x,rowOf(y)):spById(v)}
 function say(text){const a=$('announce');a.textContent=text;a.classList.add('show');clearTimeout(say.t);say.t=setTimeout(()=>a.classList.remove('show'),2400)}
 const GROUND_X=[-200,1400];
-const SOW_REFUSED={409:'Every spot holds a flower someone planted. There is no room left',429:'That is a lot of sowing. Give these a moment to take root'};
+const SOW_REFUSED={409:'Every flower here is still in its first year. Try again in a few minutes',429:'That is a lot of sowing. Give these a moment to take root'};
 // a visitor's sowing always wins: it clears the wild flowers crowding it. Live, the server keeps it; offline, the page does
 function ripple(x,y){if(!STILL){const r=el('circle',{cx:f1(x),cy:f1(y),r:6,class:'ripple'},ripples);setTimeout(()=>r.remove(),1300)}}
 async function sow(x,y){
@@ -1403,6 +1416,7 @@ function listen(){
   events=new EventSource('/api/events');
   events.addEventListener('open',refresh);
   events.addEventListener('presence',e=>{const P=JSON.parse(e.data);skew=P.now-Date.now();warmth=P.warmth;applyPresence(P);applyTending(P)});
+  events.addEventListener('withered',e=>wither(JSON.parse(e.data).id));
   events.addEventListener('sown',e=>{
     const {flower:F}=JSON.parse(e.data);
     if(byId.has(F.id))return;
@@ -1418,6 +1432,8 @@ async function refresh(){
     const G=await r.json();
     skew=G.now-Date.now();warmth=G.warmth;applyPresence(G);applyTending(G);
     for(const F of G.flowers)plant(F,false);
+    const kept=new Set(G.flowers.map(F=>F.id));
+    for(const id of [...byId.keys()])if(id>0&&!kept.has(id))wither(id);
     syncWild();
   }catch{}
 }

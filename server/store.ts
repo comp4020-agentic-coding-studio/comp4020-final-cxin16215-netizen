@@ -1,11 +1,24 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { ECHO_WINDOW_MS, presence, tend, warm, wildFor, wildNow, type Presence, type Sowing } from "./garden.ts";
+import {
+  ECHO_WINDOW_MS,
+  MAX_SOWN,
+  YEAR_MS,
+  presence,
+  tend,
+  warm,
+  wildFor,
+  wildNow,
+  type Presence,
+  type Sowing,
+} from "./garden.ts";
 
 // Everything the garden remembers, in one SQLite file on the volume: who
 // planted what where, when each visitor was last seen, the garden's running
-// total of time spent together, and how tended it is.
+// total of time spent together, and how tended it is. A planted flower that
+// withered to make room is kept with the time it went (gone_at), and counts
+// for nothing after.
 
 export type Flower = {
   id: number;
@@ -17,6 +30,8 @@ export type Flower = {
   mine: boolean;
 };
 export type Tending = { warmth: number; care: number; wild: number; wildNext: number };
+// a planted flower that gave way to a new one; `visitor` is its planter's cookie, for the log to hash
+export type Withered = { id: number; visitor: string; plantedAt: number };
 export type Garden = Presence & Tending & { now: number; flowers: Flower[] };
 
 type FlowerRow = {
@@ -61,11 +76,21 @@ export function openStore(dir: string) {
       ALTER TABLE garden ADD COLUMN wild_year INTEGER NOT NULL DEFAULT -1;
     `);
   }
+  // gardens made before flowers could wither have none gone
+  const flowerCols = (db.prepare("PRAGMA table_info(flowers)").all() as { name: string }[]).map((c) => c.name);
+  if (!flowerCols.includes("gone_at")) db.exec("ALTER TABLE flowers ADD COLUMN gone_at INTEGER");
 
   const q = {
-    flowers: db.prepare("SELECT id, species, x, y, planted_at, warmth_at, visitor FROM flowers ORDER BY id"),
-    sownCount: db.prepare("SELECT COUNT(*) AS n FROM flowers"),
+    flowers: db.prepare(
+      "SELECT id, species, x, y, planted_at, warmth_at, visitor FROM flowers WHERE gone_at IS NULL ORDER BY id",
+    ),
+    sownCount: db.prepare("SELECT COUNT(*) AS n FROM flowers WHERE gone_at IS NULL"),
+    // the per-visitor limit counts what they sowed, whether or not it has since withered
     sownBy: db.prepare("SELECT COUNT(*) AS n FROM flowers WHERE visitor = ? AND planted_at > ?"),
+    oldest: db.prepare(
+      "SELECT id, visitor, planted_at FROM flowers WHERE gone_at IS NULL AND planted_at <= ? ORDER BY planted_at, id LIMIT 1",
+    ),
+    wither: db.prepare("UPDATE flowers SET gone_at = ? WHERE id = ?"),
     sow: db.prepare(
       "INSERT INTO flowers (species, x, y, planted_at, warmth_at, visitor) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
     ),
@@ -135,11 +160,29 @@ export function openStore(dir: string) {
     sownCount: (): number => count(q.sownCount.get()),
     sownBy: (visitor: string, since: number): number => count(q.sownBy.get(visitor, since)),
 
-    // sowing is being here too
-    sow(visitor: string, s: Sowing, now: number): Flower {
-      const { warmth } = see(visitor, now);
-      const { id } = q.sow.get(s.species, s.x, s.y, now, warmth, visitor) as { id: number };
-      return { id, species: s.species, x: s.x, y: s.y, plantedAt: now, warmthAt: warmth, mine: true };
+    // Sowing is being here too. In a full garden the oldest planted flower that has lived a whole garden
+    // year withers to make room, in the same transaction; if every one is younger, nothing is sown.
+    sow(visitor: string, s: Sowing, now: number): { flower: Flower; withered?: Withered } | null {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        let withered: Withered | undefined;
+        if (count(q.sownCount.get()) >= MAX_SOWN) {
+          const old = q.oldest.get(now - YEAR_MS) as { id: number; visitor: string; planted_at: number } | undefined;
+          if (!old) {
+            db.exec("ROLLBACK");
+            return null;
+          }
+          q.wither.run(now, old.id);
+          withered = { id: old.id, visitor: old.visitor, plantedAt: old.planted_at };
+        }
+        const { warmth } = see(visitor, now);
+        const { id } = q.sow.get(s.species, s.x, s.y, now, warmth, visitor) as { id: number };
+        db.exec("COMMIT");
+        return { flower: { id, species: s.species, x: s.x, y: s.y, plantedAt: now, warmthAt: warmth, mine: true }, withered };
+      } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
+      }
     },
 
     close: (): void => db.close(),
