@@ -11,7 +11,8 @@
 set -eu
 app=comp4020-final-cxin16215-netizen
 fly() { mise exec -- flyctl "$@" -a "$app"; }
-q() { fly ssh console -q -C "sqlite3 -readonly /data/log.db \"$1\""; }
+# flyctl on Windows prints "The handle is invalid" once the remote command ends; it is noise, not an error
+q() { fly ssh console -q --pty=false -C "sqlite3 -readonly ${2:-} /data/log.db \"$1\"" 2>&1 | grep -v 'The handle is invalid'; }
 safe() { printf %s "$1" | grep -Eq "^$2\$" || { echo "not a $3: $1" >&2; exit 2; }; }
 
 case "${1:-}" in
@@ -30,7 +31,7 @@ since)
   q "SELECT line FROM log WHERE t >= '$2' ORDER BY id"
   ;;
 who)
-  q "SELECT visitor, min(t), max(t), sum(event = 'sow' AND result = 'ok') AS sown, sum(result = 'refused') AS refused FROM log WHERE visitor IS NOT NULL GROUP BY visitor ORDER BY max(t) DESC LIMIT 30"
+  q "SELECT visitor, min(t) AS first, max(t) AS last, sum(event = 'sow' AND result = 'ok') AS sown, sum(result = 'refused') AS refused FROM log WHERE visitor IS NOT NULL GROUP BY visitor ORDER BY max(t) DESC LIMIT 30" "-header -column"
   ;;
 *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
