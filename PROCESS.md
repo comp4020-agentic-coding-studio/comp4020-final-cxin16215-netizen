@@ -2,209 +2,118 @@
 
 ## From the brief to a garden
 
-The brief asks for something multi-user, real-time and persistent that becomes
-better when people use it together. I made that the main rule: the garden grows
-only when people are there together, and anyone can leave a flower behind. The
-showcase, with a room full of people, is when it should feel most alive. But it
-also has to make sense to one stranger arriving alone.
+The brief asks for something multi-user, real-time and persistent that gets
+better when people use it together. My idea was a garden that grows when
+people spend time together, where anyone can leave a flower. I pictured the
+showcase with a room full of people, but most visitors would probably arrive
+alone. Working out what the garden offers each of them became the main design
+problem.
 
-I started with the picture because the idea depends on what being together
-looks like. I built a standalone visual prototype with Claude Code in one long
-session, then brought it into the repo once the look had settled
-([`66603ae`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/66603ae)).
-Later I asked for the day to be repainted in Monet's broken colour, to give it
-a different feel from the Van Gogh night
-([`aaa3bff`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/aaa3bff)).
+I started with the visual prototype in Claude Code, using *Gris*, *Neva* and
+*The Starry Night* as references. Once the look had settled, I brought it into
+the repo ([`66603ae`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/66603ae)).
+Later, I changed the daytime colours using Monet as a reference, while keeping
+the Van Gogh night ([`aaa3bff`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/aaa3bff)).
 
-## How I directed the agent, and where it went wrong
+## The stack and workflow
 
-I gave the agent visual references (*Gris*, *Neva*, *The Starry Night*, and
-later Monet), then looked at each result and said what was wrong. These were
-the changes that mattered most:
+I chose Node 24, Hono and SQLite in one process
+([ADR 1](docs/adr/0001-stack.md)). The page draws the garden, so the server only
+needs to keep flowers, anonymous identities, presence and time spent together.
+Plain `node:http` would mean writing cookies and routing myself. Astro, the
+course default, seemed unnecessary for one page that draws itself. Node runs
+the TypeScript directly, so the tests and deployment use the same source.
+The tradeoff is that presence and live updates depend on one process, so the
+app cannot run across multiple machines.
 
-- The first draft drew trees. I wanted a garden of many kinds of flower,
-  sown by visitors and growing wild, so it became nine species.
-- Every species used the same stems and leaves; each got its own habit.
-- Twice the view felt disordered. The fix was composition, not detail:
-  rows by height, a blurred near plane, and colours graded across the bed.
-- Sowing silently did nothing once the garden was full. Now a visitor's
-  flower always takes the place of a wild one, and the page says so.
-- Withering only shrank the flower. It became a real sequence: colour drains,
-  leaves curl, heads drop and seed, and seeds wait through winter.
-- A lily sown in summer came up already withered, so a flower sown out of
-  season now waits as a seed until its kind comes round.
-- The sun stayed out through a thunderstorm; storm clouds now roll in over
-  the sun, moon and stars.
+I kept two habits the agent suggested: write a failing test before adding a
+server promise, and record decisions with tradeoffs in ADRs. The first server
+went in that way, red ([`e3bf487`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/e3bf487)) then green ([`52d4ec9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/52d4ec9)).
+The test gives the agent something concrete to work against. The ADR keeps the reason for a
+choice after the conversation is gone.
 
-These fixes happened before I put the prototype in git, so I cannot link to
-separate commits for them. I have started putting lessons like these into the
-harness. The agent once ran the spec against the deployed app and planted test
-flowers in the real garden. I added a rule against that in `CLAUDE.md`
-([`d3e4e45`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/d3e4e45)),
-alongside a rule to check visual changes by looking at them. That is how
-nearly every visual bug so far was found, by me in the browser or by the agent
-in its own screenshots.
+## Directing and correcting the agent
 
-## How the work was checked
+For visual work, I gave references, looked at the result and described what
+felt wrong. Trees became nine flower species. When the garden looked messy,
+I asked for clearer composition: height, depth and colour grouping. Withering
+needed more than smaller flowers, so leaves now curl and flower heads drop.
+A lily planted in summer looked dead immediately; out-of-season seeds now
+wait for their season. These changes happened before the prototype entered git.
 
-The agent checked its own visual work with headless screenshots across
-seasons, hours and numbers of visitors, and I looked at the page myself after
-each change. The screenshots showed a limit of the method: a headless browser
-only gives an animation a few frames, so the agent has to step a storm by hand
-to see it at all. That lesson is now in `CLAUDE.md`.
-
-I had the agent write the server's promises as tests first and run them
-against the placeholder, where they failed
-([`e3bf487`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/e3bf487)).
-The server turned them green
-([`52d4ec9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/52d4ec9)),
-and the page was connected to it after that
-([`70318a8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/70318a8)).
-The part the tests cannot reach, flowers surviving a restart and a redeploy,
-the agent checked by hand on Fly by restarting and redeploying the app.
-
-## The stack
-
-I chose Node 24, Hono and SQLite in one process. The reasons are in
-[ADR 1](docs/adr/0001-stack.md)
-([`6a5e69f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/6a5e69f)).
-The page paints itself, so the server only needs to keep an anonymous identity,
-the planted flowers, who is here, and the time people have spent together.
-Node runs the TypeScript directly, so I test the same code I deploy. Everything
-lives in one process on one machine, which fits the course setup.
-
-On the client, the Monet day uses about 25,000 brush dabs. The page paints
-them once to a canvas and shows the result as a few images instead of keeping
-25,000 SVG paths.
-
-## Crit 9: going live, and the presence decision
-
-Polling every fifteen seconds was the one thing crit 8 left for later. I had
-the agent write the promise as a test first — a flower one person sows
-reaches everyone else within about a second, with no reload — and watched it
-fail red against the polling server
-([`2df86c4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2df86c4)).
-It went green behind a server-sent-events stream that every open tab listens
-on, broadcasting a sown flower and each change in who's here
-([`a123dd4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/a123dd4)),
-and the page was switched from asking every 15 seconds to listening
-([`470fb47`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/470fb47)).
-Checked with two headless browsers standing in for two people: a flower one
-sowed reached the other's screen 9 ms later.
-
-Crit 9 also asks for one concurrency decision, argued and written down. I
-decided presence — what it means to see who else is here — was the one that
-actually mattered for this garden, and not conflict handling or reconnect
-behaviour, both of which the data model and ADR 1's persistence already
-settle without a choice to make. The reasoning, the options, and what the
-decision costs are in
-[ADR 2](docs/adr/0002-presence.md).
-
-Specifying "within a second" before building the push surfaced a bug I
-wasn't looking for: the page opens its heartbeat and its event stream at the
-same instant, and a first-time visitor with no cookie yet was handed two
-identities instead of one, so a lone visitor could count as company. Found by
-a headless screenshot that said "2 people here" for one page
-([`1d82725`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/1d82725)),
-fixed by having the page hand out its own identity instead of racing two
-endpoints for it
-([`2ef7b58`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2ef7b58)).
-A further spec compares the numbers the page and server each hold — species,
-the ground, presence, growth — against each other directly, so a change that
-updates one and forgets its twin goes red instead of waiting to be noticed
+Some mistakes became permanent instructions. The agent once ran tests against
+the deployed app and planted test flowers in the real garden. `CLAUDE.md` now
+requires a scratch database ([`d3e4e45`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/d3e4e45)) and forbids the agent from
+writing to the live one ([`288fd29`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/288fd29)). It also says never to log identity
+cookies, and to use separate Chrome profiles when checking two visitors, since
+two incognito windows share an identity ([`8ed1d78`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/8ed1d78)). Some corrections
+became specs instead: the page and server each keep the same numbers, and a
+spec now compares them, so a change that forgets one side goes red
 ([`c7a6eb3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/c7a6eb3)).
 
-The pod will see this live on their own devices at the crit, so the controls
-were also cut down for a 390-wide screen: one row of species you swipe along
-instead of four or five covering the view
-([`3176806`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/3176806)).
+The agent also corrected my assumptions. I asked for a 5x preview, then said
+the seasons still felt slow. It measured the clock and found it was already
+five times faster. After asking what I was seeing, we realised the days were
+flickering while seasons still took twenty-four seconds. Now the preview speeds
+up only the seasons ([`81e895d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/81e895d)).
+That helped me ask for changes by describing the experience first.
 
-A week after deploying, I opened the live garden and saw that almost nothing
-I or anyone else had sown had come up. I asked the agent why. It read the
-garden's state with a plain request that doesn't count as a visit, and found
-the neglect rule from crit 8 doing exactly what it said: care had decayed to
-almost zero, which put all 66 planted flowers to sleep as seeds and cut the
-wild garden to 12. Care only rises when two people overlap, and nearly every
-visitor had come alone, so the garden had been asleep for days. That broke
-the README's promise that a planted flower comes up every spring. I decided
-that neglect should leave a sparse garden, never a bare one. The agent
-specified the floor first
-([`7d6af36`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/7d6af36)),
-raised it to a third of the wild garden
-([`cbc3766`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/cbc3766)),
-and stopped neglect from putting planted flowers to sleep, so it now only
-weakens them a little
+## Making it shared and persistent
+
+For crit 9, I first wrote a test requiring a planted flower to reach everyone
+within about a second ([`2df86c4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2df86c4)). Server-sent events replaced polling
+and passed it ([`a123dd4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/a123dd4), [`470fb47`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/470fb47)).
+Checking this caught an identity race: two requests from a new visitor could
+create two identities, making one person count as company ([`1d82725`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/1d82725)).
+The fix was to hand out the identity with the page itself, so every request
+after it comes from one person ([`2ef7b58`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2ef7b58)). That kept presence matching
+the rule in [ADR 2](docs/adr/0002-presence.md).
+
+For crit 10, I added permission checks and a persistent log, specified red
+([`6bbd0fb`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/6bbd0fb)) before they went green ([`2e74468`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/2e74468)). Tests call the
+HTTP API directly, so the page cannot be the only thing stopping an invalid
+action. The log is kept in its own database on the volume, so it survives
+restarts and redeploys, and uses an eight-character hash to follow a
+visitor. Logging the cookie would let someone impersonate them; logging only totals would make it
+hard to explain what happened ([ADR 3](docs/adr/0003-who-may-do-what.md)).
+
+Before the crit, we noticed that 123 of the garden's 140 spaces were already
+filled. I initially wanted the least-nourished flower to give way, but care
+builds up for every flower at the same rate from the day it is planted, so
+the least-nourished is always the newest. Instead, a full garden retires the
+oldest flower that has lived a garden year ([`b098358`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/b098358), [`cc19533`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/cc19533)).
+Its record stays in the database ([ADR 4](docs/adr/0004-a-full-garden.md)).
+
+## What real use showed
+
+A week after crit 8, I opened the live garden and almost nothing people had
+planted had grown. All tests passed. Nearly everyone visited alone, so care
+fell close to zero and all 66 planted flowers stayed asleep as seeds. The rule was
+working, but the experience was wrong. I changed neglect to leave a sparse
+garden ([`cbc3766`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/cbc3766)), with planted flowers still appearing
 ([`70097d5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/70097d5)).
-Growth itself still comes only from time spent together. The seeds people
-had been staring at were identical brown beans, so I asked for each kind's
-real seed instead, and checked them on an enlarged specimen sheet before
-looking at them in the garden
-([`c43b0ec`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/c43b0ec)).
-Seen in the live garden, even the real seeds stood out more than the
-flowers, so they were drawn smaller and their earth fainter
-([`7be0441`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/7be0441)).
-The lesson matches crit 8's: a rule that reads well in the design can still
-leave the lone visitor with nothing, and the place to find that is the
-deployed app after real use, not the spec.
 
-The garden also felt sluggish. Rather than guess, I had the agent measure it
-in a headless browser first: script took about 0.2 s in 8, and almost all
-the rest went to rasterising, because every layer shared one surface and any
-moving mote repainted the thousands of still paths under it, along with two
-full-screen noise filters on the paper. It baked the paper into a tile, gave
-each layer its own compositor layer on wide screens, and capped the
-animation at about 30 frames a second
-([`32aa475`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/32aa475)).
-The measurements also showed where a plausible fix backfired: giving every
-layer its own surface on a phone made it slower, so phones don't get it.
-Before and after screenshots differ by under 1/255 on average.
+When the garden felt slow, measurement showed that repainting unchanged layers
+was the expensive part ([`32aa475`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/32aa475)). The crit 10 rehearsal checked
+something different: two Chrome profiles planted flowers and tried actions the
+server refused, then the machine restarted. The log the agent read back
+afterwards was enough to tell what each visitor did and why an action was
+refused, and the lines from before the restart were still there
+([`f72485f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/f72485f)).
+It was my first check that did not depend on watching the screen.
 
-For showing the garden at the crit, a year of eight minutes is too long, so
-I asked for a 5x speed in the console. As `CLAUDE.md` requires of the
-console, it changes only what one browser shows and never how fast anything
-grows
-([`6b2e76c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/6b2e76c)).
-The first version sped up the whole clock, and I told the agent the seasons
-were still dragging. It measured the live site and found the clock really
-was five times faster, so instead of guessing at a fix it asked me what I
-was seeing. The answer was that at 5x a day lasted twelve seconds, so the sky
-flickered while each season still took twenty-four. Now only the seasons run
-faster and the days keep their pace
-([`81e895d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/81e895d)).
-What I asked for and what I meant were different, and only looking at it
-together showed that.
+## Where I stand
 
-## Where it stands
+Visitors can leave a flower and find it again, and everyone sees changes
+within a second. The unresolved question is still the person arriving alone:
+care stays low and flowers stay small until there is company. The showcase
+will test how much being together adds.
 
-Someone can sow a flower, leave, and find it again when they come back. The
-garden counts who is here and who just left, and grows only with company.
-Other people's flowers and arrivals now reach every open tab within about a
-second, pushed rather than polled, and an arrival shows as its own light and
-colour spreading through the garden rather than a number
-([`41a823d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-cxin16215-netizen/commit/41a823d)).
-A neglected garden thins to a sparse third instead of going bare, and its
-planted flowers still come up. What is still open is the lone visitor: of
-the 66 flowers in the live garden, 48 were sown by someone alone and have
-had no company since, so they stay as sprouts until two people visit at the
-same time. That follows the garden's first rule, and the crit, with the pod
-in the garden together, is the first real test of whether it is worth it.
-
-## What I read, and where I stand
-
-Of what I read about good software at this scale, Clay Shirky's
-["Situated Software"](http://shirky.com/essays/situated-software/) (2004) fits
-the garden most closely: software built in and for one social situation, taken
-up because it was made for the people using it, and allowed to stay small. I
-agree with him that not scaling is a fair price here. The garden is for
-whoever is present at the same moment, and it runs on one machine by design.
-
-Where I part from him is lifespan. He accepts that situated software may not
-last, and the garden may well end with the course. But while it is open, a
-trace someone leaves must not disappear, because that is the one promise it
-makes to a stranger. Reading him is what made me add that limit to the claim in
-`README.md`.
-
-I also read Mike Caulfield's "The Garden and the Stream" (2015). Despite the
-name, it is about how knowledge is organised on the web, linked and reworked
-rather than scrolled past in a feed, not about people being present together,
-so I did not draw on it.
+Clay Shirky's [“Situated Software”](http://shirky.com/essays/situated-software/)
+(2004) helped me think about keeping this small. The garden is built for a
+particular social situation, and one machine is enough for it. I agree that
+scaling does not have to be the goal. I am less comfortable with accepting a
+short lifespan. The garden may end with the course, but while it is open,
+someone's flower should not disappear without a reason. Making room in a full
+garden forced me to qualify that promise: people cannot remove another
+person's flower, but time eventually can.
