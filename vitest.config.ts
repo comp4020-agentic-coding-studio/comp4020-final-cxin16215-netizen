@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     include: ["spec/**/*.test.ts"],
     globalSetup: ["./spec/global-setup.ts"],
+    // some tests start a garden of their own (spec/scratch.ts), which takes a few seconds to boot
+    testTimeout: 30_000,
   },
 });
