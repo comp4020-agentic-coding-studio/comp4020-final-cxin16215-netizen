@@ -1367,8 +1367,13 @@ function statusText(){
   const who=(LIVE&&(peopleOverride||careOverride)?`Preview: ${people} ${people===1?'person':'people'}`
     :`${fastFrom?'Preview: ':''}${here} ${here===1?'person':'people'} here${LIVE&&presenceInfo.echo>=.3?' · company not long gone':''}`)
     +(fastFrom?` · ${SHOW_X}× seasons`:'');
-  const s=people===1?(care<DORMANT?'just you, and the garden has gone wild':'just you, so the garden is waiting')
-    :flowers.filter(f=>f.sown).length>=MAX?'full, so old flowers make way':care<.35?'the garden is waking up':'the garden is growing';
+  // in late autumn and winter most kinds rest as seeds, and a bare bed reads as neglect unless it is said; the
+  // time spent together still counts, and shows when they come up
+  const sown=flowers.filter(f=>f.sown&&f.dying==null),resting=sown.filter(f=>lifeOf(f).seed).length;
+  const asleep=sown.length>0&&resting>sown.length/2;
+  const s=people===1?(care<DORMANT?'just you, and the garden has gone wild':asleep?'just you · flowers resting till spring':'just you, so the garden is waiting for company')
+    :asleep?'flowers resting till spring, still growing'
+    :sown.length>=MAX?'full, so old flowers make way':care<.35?'the garden is waking up':'the garden is growing';
   return`${who} · ${s} · ${back.length?'colours back: '+back.join(', '):'no colours back yet'}`;
 }
 
