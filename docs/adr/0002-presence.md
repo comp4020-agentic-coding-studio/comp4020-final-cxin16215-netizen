@@ -80,6 +80,12 @@ than dropping to zero the instant their tab closes (`server/garden.ts`,
   "there" for up to about an hour at a shrinking weight. That cost was accepted
   deliberately for the feel of lingering company; a stricter, instantaneous
   count was the exact thing crit 8 moved away from.
+- **Counting heartbeats let anyone make company.** Until `ba11a88` any
+  request to `/api/presence`, or a sowing, counted its cookie as here, so a
+  script with four fresh cookies made "7 people here" and brought every
+  colour back. Now only a visitor with the event stream open is seen, which
+  ties presence to the page being open; the cost is that a page whose stream
+  has died isn't counted, so the page reopens it.
 - **Getting identity wrong once was expensive, not free.** The page opens its
   heartbeat and its event stream at the same instant on first visit; before
   `1d82725`/`2ef7b58`, each request without a cookie yet was handed its own

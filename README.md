@@ -38,7 +38,8 @@ flowers, the same shape for the same flower on every screen.
 Checked by `spec/` on every change: a stranger can sow on their first visit and
 their flower is there when they come back, marked as theirs; everyone else sees
 it, not as theirs; the garden refuses species it doesn't grow and places that
-aren't ground; two people at once count as company; nobody can remove or move a
+aren't ground; two people with the garden open count as company, and requests
+without it open count as nobody; nobody can remove or move a
 flower, and nobody learns anyone else's identity; the garden keeps a log of who
 did what that names each visitor only by a short hash and outlives a restart.
 By hand on the deployed app: flowers and the log survive a restart and a

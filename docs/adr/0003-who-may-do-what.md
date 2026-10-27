@@ -35,11 +35,13 @@ offers) are a courtesy; the rules hold for a request sent by hand.
 | Choose who a flower is planted by | The planter is the cookie; any other field sent with a sowing is ignored | The cookie is the only identity |
 | Learn another visitor's identity | No response carries anyone else's cookie or hash; a malformed or guessed cookie is handed a fresh one | Holding the cookie is being that person |
 | Read the log | No route serves it | See below |
+| Count as here without the garden open | Only a visitor with the event stream open is seen; a heartbeat or a sowing with no page open adds nobody | Growth is time spent together, so company can't be made out of requests (CLAUDE.md) |
 
 These are checked against the HTTP API in `spec/permissions.test.ts`: sowing in
 the sky, the 13th flower within ten minutes and the first one after (on a
 garden whose clock the test moves on), the 141st flower, PUT/PATCH/DELETE, two
-cookies asking about each other, and forged cookies.
+cookies asking about each other, forged cookies, and heartbeats and sowings
+from cookies that never opened the garden.
 
 ## The log
 

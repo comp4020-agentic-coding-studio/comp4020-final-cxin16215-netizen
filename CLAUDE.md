@@ -61,7 +61,9 @@ before changing anything.
   write to the server, change anyone else's garden, or make anything grow
   faster, and the status line says "Preview" while they are in use. Five
   people are hard to gather for a demo, so a preview is allowed; a way to fake
-  company for everyone is not.
+  company for everyone is not. Only a visitor with the event stream open
+  counts as here, and `spec/permissions.test.ts` fails if a heartbeat or a
+  sowing from a page that isn't open adds anyone.
 - Keeps the twin numbers in step: species, the ground, presence and growth are
   in both `server/garden.ts` and `public/index.html`.
 - Logs what a visitor does that changes anything, or is refused, through
