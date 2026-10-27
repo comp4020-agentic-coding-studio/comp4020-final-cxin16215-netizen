@@ -38,6 +38,10 @@
   header{position:fixed;z-index:15;top:0;left:0;right:0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;padding:16px;font-size:14px;letter-spacing:.06em;color:var(--ink-soft);pointer-events:none;transition:color 1.5s ease,text-shadow 1.5s ease;text-shadow:0 0 3px rgba(242,236,225,.95),0 0 10px rgba(242,236,225,.8)}
   /* a soft halo keeps the header legible over mottled cloud and sky, not only over plain paper */
   .dark header{color:#ece7dc;text-shadow:0 0 3px rgba(22,26,40,.9),0 0 10px rgba(22,26,40,.75)}
+  /* the ring round your own flower keeps one size on screen, so a phone's smaller garden doesn't shrink it to a
+     speck, and goes light when the sky is dark so it doesn't vanish into the night ground */
+  .mine{r:var(--mine-r,7px);fill:none;stroke:#3a332d;stroke-width:var(--mine-w,1.2px);opacity:.75;transition:stroke 1.5s ease}
+  .dark .mine{stroke:#f2ece1;opacity:.85}
   header p{margin:0}
   input[type=checkbox]{accent-color:var(--ink);margin:0}
   #controls{position:fixed;z-index:15;left:16px;right:16px;bottom:16px;margin:0 auto;width:fit-content;max-width:calc(100% - 32px);display:flex;flex-direction:column;gap:10px;padding:12px 18px;background:rgba(242,236,225,.88);border:1px solid var(--line);border-radius:20px;font-size:14px}
@@ -1154,7 +1158,7 @@ function addFlower(sp,x,y,p,mine,fresh){
   const body=el('g',{},g);
   const B=makeBuilder(body,sc,t<.3,SEEDHEAD[sp.id]);
   HABITS[sp.id](B,x,y,sc,h,lean,sc*sp.size*1.4);
-  if(mine)el('circle',{cx:f1(x),cy:f1(y+3),r:(3.2*sc).toFixed(1),fill:'none',stroke:INK,'stroke-width':1,opacity:.7},g);
+  if(mine)el('circle',{cx:f1(x),cy:f1(y+3),class:'mine'},g);
   const f={sp,g,body,seedEl,stems:B.stems,leaves:B.leaves,heads:B.heads,x,y,sc,dir:lean>=0?1:-1,p,rate:.8+rand()*.4,mine,jit:(rand()-.5)*.16,key:'',lastK:0};
   if(fresh&&lifeOf(f).k>0)f.wait=true;
   f.lastK=lifeOf(f).k;
@@ -1472,6 +1476,8 @@ function fitView(){
   const w=innerWidth,h=innerHeight,ch=$('controls').offsetHeight+28,top=48;
   root.style.setProperty('--ctl',`${$('controls').offsetHeight}px`);
   const s=Math.min(w/ROI.w,Math.max(120,h-ch-top)/ROI.h);
+  // about 15 px across on any screen, however far the garden is scaled to fit it
+  root.style.setProperty('--mine-r',`${(7.5/s).toFixed(2)}px`);root.style.setProperty('--mine-w',`${(1.3/s).toFixed(2)}px`);
   const vw=w/s,vh=h/s,vx=ROI.x+ROI.w/2-vw/2,vy=ROI.y+ROI.h-(h-ch)/s;
   const vb=`${f1(vx)} ${f1(vy)} ${f1(vw)} ${f1(vh)}`;
   for(const e of[skySvg,daySky,celestial,starry,bg,dayLand,fg,near,cornerSvg,weather,nightSvg,motesSvg,bloomSvg])e.setAttribute('viewBox',vb);
@@ -1692,7 +1698,10 @@ function frame(now){
     if(auto){$('hour').value=hour.toFixed(2);$('season').value=season.toFixed(2)}
     $('hourOut').textContent=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
     $('seasonOut').textContent=cap(sn);
-    $('clock').textContent=`${cap(sn)} · ${timeName(hour)}`;
+    // someone coming back finds out first whether their flower is still here, and why it may look like bare ground
+    const mine=flowers.filter(f=>f.mine&&f.sown&&f.dying==null),many=mine.length>1;
+    const yours=!mine.length?'':mine.every(f=>lifeOf(f).seed)?` · your flower${many?'s are':' is'} resting`:` · your flower${many?'s are':' is'} here`;
+    $('clock').textContent=`${cap(sn)} · ${timeName(hour)}${yours}`;
   }
   const mt=STILL?8:now/1000;
   motes.forEach((m,i)=>{
