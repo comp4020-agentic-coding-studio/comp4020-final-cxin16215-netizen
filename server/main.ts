@@ -89,14 +89,26 @@ const leave = (visitor: string, how: "closed" | "shutdown"): void => {
   const stayed = `${Math.round((now - o.since) / 1000)}s`;
   log.write({ event: "leave", visitor, result: "ok", how, stayed, open: open.size, people: store.state(now).people });
 };
+// Being here is having the garden open: everyone with a page listening is seen again every few seconds, which
+// is what keeps them counted, and nothing else is. A heartbeat by itself (a script, or a page whose stream has
+// closed) only asks how things stand, so nobody can make company out of requests. When a page closes its last
+// sighting stays, and company fades from it as before (ADR 2).
+const seeEveryoneOpen = (): void => {
+  const now = clock();
+  for (const visitor of open.keys()) store.heartbeat(visitor, now);
+};
 // company fades on its own as people leave, so the listeners hear how things stand now and then as well
-setInterval(() => listeners.size && tellPresence(), 10_000).unref();
+setInterval(() => {
+  seeEveryoneOpen();
+  if (listeners.size) tellPresence();
+}, 10_000).unref();
 // a comment every so often keeps quiet connections from being dropped along the way
 const PING_MS = 20_000;
 
 app.get("/api/garden", (c) => c.json(store.garden(c.get("visitor"), clock())));
 app.post("/api/presence", (c) => {
-  const state = store.heartbeat(c.get("visitor"), clock());
+  const visitor = c.get("visitor");
+  const state = open.has(visitor) ? store.heartbeat(visitor, clock()) : store.state(clock());
   tellPresence();
   return c.json(state);
 });
@@ -148,7 +160,8 @@ app.post("/api/flowers", tooBig, async (c) => {
   if (store.sownBy(visitor, now - SOW_LIMIT.windowMs) >= SOW_LIMIT.count) {
     return refuse("too-many", 429, "give these a moment to take root");
   }
-  const sown = store.sow(visitor, sowing, now);
+  // sowing with the garden open is being here; a sowing with no page open leaves its flower and nothing more
+  const sown = store.sow(visitor, sowing, now, open.has(visitor));
   // only a garden whose planted flowers are all in their first year has no room
   if (!sown) return refuse("full", 409, "every flower here is still in its first year");
   const { flower, withered } = sown;

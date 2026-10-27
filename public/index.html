@@ -1413,10 +1413,14 @@ async function heartbeat(){
 // Someone else's flower arrives where they sowed it, with the same ripple and note as your own. A hidden tab
 // stops listening, so a page left open in the background doesn't keep the garden's machine awake
 let events=null;
+// Having the stream open is what counts as being here, so a stream the browser has given up on (a 502 while
+// the machine restarts, say) is opened again rather than left closed until a reload
 function listen(){
+  if(events?.readyState===2){events=null}
   if(events||document.hidden||!window.EventSource)return;
   events=new EventSource('/api/events');
   events.addEventListener('open',refresh);
+  events.addEventListener('error',()=>{if(events?.readyState===2){events=null;setTimeout(listen,3000)}});
   events.addEventListener('presence',e=>{const P=JSON.parse(e.data);skew=P.now-Date.now();warmth=P.warmth;applyPresence(P);applyTending(P)});
   events.addEventListener('withered',e=>wither(JSON.parse(e.data).id));
   events.addEventListener('sown',e=>{
@@ -1796,7 +1800,7 @@ updateWeather(0,0);
 for(const f of flowers)drawFlower(f);
 requestAnimationFrame(()=>requestAnimationFrame(t=>{root.classList.add('ready');last=t;frame(t)}));
 setTimeout(()=>{arrivals=true},LIVE?4000:1500);
-if(LIVE){const tick=()=>heartbeat().then(()=>{if(events?.readyState!==1)refresh()});tick();setInterval(tick,15000);listen()}
+if(LIVE){const tick=()=>heartbeat().then(()=>{if(events?.readyState!==1){refresh();listen()}});tick();setInterval(tick,15000);listen()}
 </script>
 </body>
 </html>

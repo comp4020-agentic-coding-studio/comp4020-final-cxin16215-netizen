@@ -160,9 +160,9 @@ export function openStore(dir: string) {
     sownCount: (): number => count(q.sownCount.get()),
     sownBy: (visitor: string, since: number): number => count(q.sownBy.get(visitor, since)),
 
-    // Sowing is being here too. In a full garden the oldest planted flower that has lived a whole garden
-    // year withers to make room, in the same transaction; if every one is younger, nothing is sown.
-    sow(visitor: string, s: Sowing, now: number): { flower: Flower; withered?: Withered } | null {
+    // Sowing with the garden open is being here too. In a full garden the oldest planted flower that has lived
+    // a whole garden year withers to make room, in the same transaction; if every one is younger, nothing is sown.
+    sow(visitor: string, s: Sowing, now: number, here: boolean): { flower: Flower; withered?: Withered } | null {
       db.exec("BEGIN IMMEDIATE");
       try {
         let withered: Withered | undefined;
@@ -175,7 +175,7 @@ export function openStore(dir: string) {
           q.wither.run(now, old.id);
           withered = { id: old.id, visitor: old.visitor, plantedAt: old.planted_at };
         }
-        const { warmth } = see(visitor, now);
+        const { warmth } = here ? see(visitor, now) : tendingAt(now, presenceAt(now).people);
         const { id } = q.sow.get(s.species, s.x, s.y, now, warmth, visitor) as { id: number };
         db.exec("COMMIT");
         return { flower: { id, species: s.species, x: s.x, y: s.y, plantedAt: now, warmthAt: warmth, mine: true }, withered };

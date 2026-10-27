@@ -142,6 +142,10 @@ it("counts only people with the garden open as here, never a heartbeat sent by i
     for (let i = 0; i < 4; i++) {
       expect(await here(await stranger(g)), "a heartbeat from someone without the page open").toBe(1);
     }
+    // sowing leaves a flower, but a flower sown without the page open isn't company either
+    for (let i = 0; i < 4; i++) {
+      expect((await sow(g, await stranger(g), { species: "tulip", x: 200 + i * 40, y: 700 })).status).toBe(201);
+    }
     const state = (await (await fetch(g.url("/api/garden"), { headers: { cookie: me } })).json()) as { here: number; people: number };
     expect(state, "nobody was added").toMatchObject({ here: 1, people: 1 });
 
