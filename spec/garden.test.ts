@@ -80,13 +80,26 @@ it("turns away a flower the garden can't grow", async () => {
   expect((await sow(me, { species: "poppy", x: "far", y: 700 })).status, "not a place").toBe(400);
 });
 
+// being here is having the garden open: the page holds its event stream open for as long as it is showing
+const visit = async (cookie: string): Promise<() => void> => {
+  const stop = new AbortController();
+  const res = await fetch(url("/api/events"), { headers: { cookie, accept: "text/event-stream" }, signal: stop.signal });
+  await res.body!.getReader().read();
+  return () => stop.abort();
+};
+
 it("counts two people in the garden at once as company", async () => {
   const a = await stranger();
   const b = await stranger();
-  const hello = (cookie: string): Promise<Response> =>
-    fetch(url("/api/presence"), { method: "POST", headers: { cookie } });
-
-  await hello(a);
-  const { people } = (await (await hello(b)).json()) as { people: number };
-  expect(people).toBeGreaterThanOrEqual(2);
+  const leaveA = await visit(a);
+  const leaveB = await visit(b);
+  try {
+    const { people } = (await (await fetch(url("/api/presence"), { method: "POST", headers: { cookie: b } })).json()) as {
+      people: number;
+    };
+    expect(people).toBeGreaterThanOrEqual(2);
+  } finally {
+    leaveA();
+    leaveB();
+  }
 });

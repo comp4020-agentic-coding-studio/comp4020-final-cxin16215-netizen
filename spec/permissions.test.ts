@@ -1,6 +1,6 @@
 import { afterEach, expect, inject, it } from "vitest";
 import { SOW_LIMIT } from "../server/garden.ts";
-import { scratch, sow, stranger, type Scratch } from "./scratch.ts";
+import { open, scratch, sow, stranger, type Scratch } from "./scratch.ts";
 
 // What each visitor may do and see, decided by the server (docs/adr/0003-who-may-do-what.md), checked by
 // asking the HTTP API directly the way someone skipping the page would: the page's own limits are a
@@ -124,4 +124,35 @@ it(`lets a visitor sow ${SOW_LIMIT.count} in ten minutes, refuses the next, and 
   expect((await sow(g, me, { species: "poppy", x: 400, y: 700 })).status, "still inside the ten minutes").toBe(429);
   g.advance(2000);
   expect((await sow(g, me, { species: "poppy", x: 400, y: 700 })).status, "the window has passed").toBe(201);
+});
+
+// Company is people with the garden open, and growth is time spent together, so nobody may make company out
+// of nothing: a heartbeat sent without the page open (a script, or a page whose stream has closed) says
+// nothing about who is here. CLAUDE.md: a way to fake company for everyone is not allowed.
+it("counts only people with the garden open as here, never a heartbeat sent by itself", async () => {
+  const g = await scratch();
+  gardens.push(g);
+  const here = async (cookie: string): Promise<number> =>
+    ((await (await fetch(g.url("/api/presence"), { method: "POST", headers: { cookie } })).json()) as { here: number }).here;
+
+  const me = await stranger(g);
+  const page = await open(g, me);
+  try {
+    expect(await here(me), "the one person with the page open").toBe(1);
+    for (let i = 0; i < 4; i++) {
+      expect(await here(await stranger(g)), "a heartbeat from someone without the page open").toBe(1);
+    }
+    const state = (await (await fetch(g.url("/api/garden"), { headers: { cookie: me } })).json()) as { here: number; people: number };
+    expect(state, "nobody was added").toMatchObject({ here: 1, people: 1 });
+
+    const other = await stranger(g);
+    const theirs = await open(g, other);
+    try {
+      expect(await here(me), "a second person opening the garden is company").toBe(2);
+    } finally {
+      theirs.close();
+    }
+  } finally {
+    page.close();
+  }
 });
