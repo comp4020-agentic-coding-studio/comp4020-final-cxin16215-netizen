@@ -6,6 +6,7 @@ import { streamSSE } from "hono/streaming";
 import { marked } from "marked";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { SOW_LIMIT, validSowing } from "./garden.ts";
 import { openLog } from "./log.ts";
 import { openStore } from "./store.ts";
@@ -20,6 +21,9 @@ const store = openStore(dataDir);
 const log = openLog(dataDir, clock);
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 const page = read("../public/index.html");
+// the page is one 110 kB file that never changes while the server runs, so it is compressed once, here, for the
+// slow connection that would otherwise wait seconds on blank paper
+const pageGz = gzipSync(page, { level: 9 });
 const readme = readmePage(read("../README.md"));
 
 type Env = { Variables: { visitor: string } };
@@ -52,7 +56,14 @@ const identify: MiddlewareHandler<Env> = async (c, next) => {
 app.use("/", identify);
 app.use("/api/*", identify);
 
-app.get("/", (c) => c.html(page));
+app.get("/", (c) => {
+  c.header("Vary", "Accept-Encoding");
+  if (!/gzip/.test(c.req.header("Accept-Encoding") ?? "")) return c.html(page);
+  c.header("Content-Encoding", "gzip");
+  return c.body(pageGz, 200, { "Content-Type": "text/html; charset=UTF-8" });
+});
+// the icon is drawn in the page itself; a browser that asks for the old file anyway gets nothing, not an error
+app.get("/favicon.ico", (c) => c.body(null, 204));
 app.get("/readme", (c) => c.redirect("/readme/", 301));
 app.get("/readme/", (c) => c.html(readme));
 
