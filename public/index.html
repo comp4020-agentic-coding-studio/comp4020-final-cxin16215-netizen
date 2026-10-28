@@ -84,6 +84,9 @@
     #picker::-webkit-scrollbar{display:none}
     #picker legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
     .chip{flex:none}
+    /* fingers, not pointers: targets near 40 px tall */
+    :root:not(.debug) #controls button,:root:not(.debug) .chip{min-height:40px;padding:6px 14px}
+    :root:not(.debug) #controls .about{display:inline-flex;align-items:center;min-height:40px;padding:0 6px}
     .row.debug,.fx{gap:6px 10px}
   }
   /* the controls for looking at the garden rather than being in it: ?debug, or opened as a file */
@@ -1452,7 +1455,13 @@ async function refresh(){
     syncWild();
   }catch{}
 }
-fg.addEventListener('click',e=>{let[x,y]=svgPoint(e);if(y<BAND[0]-10||y>BAND[1]+20)y=BAND[0]+Math.random()*(BAND[1]-BAND[0]);sow(x,Math.min(BAND[1],Math.max(BAND[0],y)))});
+// a tap sows where it lands on the ground; a tap in the sky (scrolling, a stray touch) sows nothing, and on a
+// touch screen it says where to tap instead
+fg.addEventListener('click',e=>{
+  const[x,y]=svgPoint(e);
+  if(y<BAND[0]-24||y>BAND[1]+24){if(e.pointerType==='touch'||matchMedia('(pointer:coarse)').matches)say('Tap the ground to sow there, or use Sow somewhere');return}
+  sow(x,Math.min(BAND[1],Math.max(BAND[0],y)));
+});
 $('sow').addEventListener('click',()=>{rand=Math.random;const[x,y]=wildSpot(false);sow(x,y)});
 
 const chips={};
@@ -1461,6 +1470,9 @@ function buildPicker(){
   const add=(value,name,color,checked)=>{const l=document.createElement('label');l.className='chip';l.innerHTML=`<input type="radio" name="species" value="${value}"${checked?' checked':''}>${color?`<span class="dot" style="--dot:${color}"></span>`:''}${name}<span class="sr-only"></span>`;fs.appendChild(l);chips[value]=l};
   add('random','Any',null,true);
   for(const sp of SPECIES)add(sp.id,sp.name,sp.c1,false);
+  // the green dot's meaning sits in a legend a phone hides and a tooltip a finger can't reach, so choosing a kind
+  // says it in words
+  fs.addEventListener('change',e=>{const sp=spById(e.target.value);if(sp)say(`${sp.name}: ${chips[sp.id].classList.contains('now')?'sprouts if sown now':'sown now, it waits as a seed until spring'}`)});
 }
 // a species is in season from when its shoots come up until its flowers fade; sown outside that it waits as a seed
 function updatePicker(){
@@ -1475,6 +1487,8 @@ function updatePicker(){
 function fitView(){
   const w=innerWidth,h=innerHeight,ch=$('controls').offsetHeight+28,top=48;
   root.style.setProperty('--ctl',`${$('controls').offsetHeight}px`);
+  // a phone shows the whole width of the garden, small, rather than a closer middle: framing even 85% of it left
+  // a tenth of the live garden's planted flowers off screen, and someone coming back has to find theirs
   const s=Math.min(w/ROI.w,Math.max(120,h-ch-top)/ROI.h);
   // about 15 px across on any screen, however far the garden is scaled to fit it
   root.style.setProperty('--mine-r',`${(7.5/s).toFixed(2)}px`);root.style.setProperty('--mine-w',`${(1.3/s).toFixed(2)}px`);
